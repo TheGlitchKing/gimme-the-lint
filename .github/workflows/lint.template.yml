@@ -1,0 +1,35 @@
+# gimme-the-lint: Progressive Linting Workflow Template
+# Copy this file to your repo's .github/workflows/lint.yml
+# Customize inputs as needed for your project
+
+name: Progressive Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write  # Required for PR comments
+
+jobs:
+  lint:
+    name: Progressive Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changed file detection
+
+      - uses: TheGlitchKing/gimme-the-lint@v1
+        with:
+          mode: progressive      # Only lint changed files (use 'full' for entire codebase)
+          fix: false              # Set to 'true' to auto-fix in CI
+          frontend: true          # Enable ESLint checks
+          backend: true           # Enable Ruff checks
+          python-version: '3.11'  # Python version for backend
+          node-version: '20'      # Node.js version
+          comment-on-pr: true     # Post results as PR comment

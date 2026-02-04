@@ -1,0 +1,13 @@
+.git
+.github
+.claude
+.claude-memory
+tests/
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+.gitignore
+.eslintrc*
+.prettierrc*
+node_modules/

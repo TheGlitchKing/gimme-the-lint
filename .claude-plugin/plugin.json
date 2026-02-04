@@ -1,0 +1,48 @@
+{
+  "name": "gimme-the-lint",
+  "version": "1.0.0",
+  "displayName": "Gimme The Lint",
+  "description": "Progressive linting with directory-chunked baselines, drift detection, and auto-healing for monorepo projects",
+  "author": {
+    "name": "TheGlitchKing",
+    "email": "theglitchking@users.noreply.github.com",
+    "github": "TheGlitchKing"
+  },
+  "repository": {
+    "type": "github",
+    "owner": "TheGlitchKing",
+    "repo": "gimme-the-lint",
+    "url": "https://github.com/TheGlitchKing/gimme-the-lint"
+  },
+  "claudeCodeVersion": ">=1.0.0",
+  "type": "claude-plugin",
+  "category": "productivity",
+  "tags": ["linting", "progressive-linting", "eslint", "ruff", "python", "monorepo", "git-hooks", "drift-detection"],
+  "license": "MIT",
+  "hooks": {},
+  "commands": [
+    {
+      "name": "lint",
+      "description": "Run progressive linting checks on the current project",
+      "file": "commands/lint.md"
+    },
+    {
+      "name": "lint:status",
+      "description": "Show progressive linting dashboard with drift detection",
+      "file": "commands/lint-status.md"
+    },
+    {
+      "name": "lint:baseline",
+      "description": "Create or refresh linting baselines",
+      "file": "commands/lint-baseline.md"
+    }
+  ],
+  "agents": [
+    {
+      "name": "linting-agent",
+      "description": "Background agent that runs progressive linting and reports results",
+      "type": "general-purpose",
+      "file": "../agents/linting-agent.md"
+    }
+  ]
+}

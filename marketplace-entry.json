@@ -1,0 +1,56 @@
+{
+  "id": "gimme-the-lint",
+  "name": "gimme-the-lint",
+  "displayName": "Gimme The Lint",
+  "type": "claude-plugin",
+  "version": "1.0.0",
+  "description": "Progressive linting with directory-chunked baselines, drift detection, and auto-healing for monorepo projects (Python + JS/TS)",
+  "author": {
+    "name": "TheGlitchKing"
+  },
+  "repository": {
+    "type": "github",
+    "owner": "TheGlitchKing",
+    "repo": "gimme-the-lint",
+    "url": "https://github.com/TheGlitchKing/gimme-the-lint"
+  },
+  "source": {
+    "type": "npm",
+    "package": "@theglitchking/gimme-the-lint"
+  },
+  "installation": {
+    "methods": [
+      {
+        "type": "npm",
+        "command": "npm install --save-dev @theglitchking/gimme-the-lint && npx gimme-the-lint install"
+      },
+      {
+        "type": "npx",
+        "command": "npx @theglitchking/gimme-the-lint install"
+      },
+      {
+        "type": "claude-marketplace",
+        "command": "/plugin install TheGlitchKing/gimme-the-lint"
+      },
+      {
+        "type": "github-action",
+        "uses": "TheGlitchKing/gimme-the-lint@v1"
+      }
+    ],
+    "requirements": {
+      "node": ">=18.0.0",
+      "python": ">=3.8 (optional, for backend linting)",
+      "claude-code": ">=1.0.0"
+    }
+  },
+  "category": "productivity",
+  "tags": ["linting", "progressive-linting", "eslint", "ruff", "python", "monorepo", "git-hooks", "drift-detection", "github-action", "claude-plugin"],
+  "keywords": ["linting", "progressive", "baseline", "eslint", "ruff", "python", "javascript", "typescript", "monorepo", "drift-detection", "auto-healing", "git-hooks", "github-action"],
+  "license": "MIT",
+  "homepage": "https://github.com/TheGlitchKing/gimme-the-lint",
+  "status": "production-ready",
+  "features": {
+    "commands": ["/lint", "/lint:status", "/lint:baseline"],
+    "hooks": []
+  }
+}

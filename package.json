@@ -1,0 +1,82 @@
+{
+  "name": "@theglitchking/gimme-the-lint",
+  "version": "1.0.0",
+  "description": "Progressive linting system with directory-chunked baselines, drift detection, and auto-healing for monorepo projects (Python + JS/TS)",
+  "keywords": [
+    "linting",
+    "progressive-linting",
+    "eslint",
+    "ruff",
+    "python",
+    "javascript",
+    "typescript",
+    "monorepo",
+    "git-hooks",
+    "baseline",
+    "drift-detection",
+    "claude-plugin"
+  ],
+  "author": {
+    "name": "TheGlitchKing",
+    "email": "theglitchking@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheGlitchKing/gimme-the-lint.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TheGlitchKing/gimme-the-lint/issues"
+  },
+  "homepage": "https://github.com/TheGlitchKing/gimme-the-lint",
+  "main": "lib/index.js",
+  "bin": {
+    "gimme-the-lint": "./bin/gimme-the-lint.js"
+  },
+  "scripts": {
+    "postinstall": "node ./bin/postinstall.js",
+    "setup:venv": "bash ./scripts/setup-venv.sh",
+    "install:hooks": "bash ./githooks/install.sh",
+    "lint:init": "node ./bin/gimme-the-lint.js init",
+    "check": "node ./bin/gimme-the-lint.js check",
+    "check:fix": "node ./bin/gimme-the-lint.js check --fix",
+    "baseline": "node ./bin/gimme-the-lint.js baseline",
+    "dashboard": "node ./bin/gimme-the-lint.js dashboard",
+    "prepublishOnly": "bash ./scripts/validate-version.sh",
+    "test": "node --test tests/*.test.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "templates/",
+    "githooks/",
+    "lib/",
+    ".claude-plugin/",
+    "agents/",
+    "docs/",
+    "install.sh",
+    "uninstall.sh",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "fs-extra": "^11.2.0"
+  },
+  "peerDependencies": {
+    "eslint": "^9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    }
+  }
+}

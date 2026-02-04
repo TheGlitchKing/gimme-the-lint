@@ -1,0 +1,277 @@
+name: 'gimme-the-lint'
+description: 'Progressive linting with directory-chunked baselines, drift detection, and auto-healing'
+author: 'TheGlitchKing'
+
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  mode:
+    description: 'Linting mode: progressive (changed files only) or full (entire codebase)'
+    required: false
+    default: 'progressive'
+  fix:
+    description: 'Auto-fix violations when possible'
+    required: false
+    default: 'false'
+  frontend:
+    description: 'Enable frontend linting (ESLint)'
+    required: false
+    default: 'true'
+  backend:
+    description: 'Enable backend linting (Ruff/Python)'
+    required: false
+    default: 'true'
+  python-version:
+    description: 'Python version for backend linting'
+    required: false
+    default: '3.11'
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '20'
+  working-directory:
+    description: 'Working directory (defaults to repo root)'
+    required: false
+    default: '.'
+  comment-on-pr:
+    description: 'Post linting summary as PR comment'
+    required: false
+    default: 'true'
+
+outputs:
+  frontend-status:
+    description: 'Frontend linting result (pass/fail/skip)'
+    value: ${{ steps.lint.outputs.frontend_status }}
+  backend-status:
+    description: 'Backend linting result (pass/fail/skip)'
+    value: ${{ steps.lint.outputs.backend_status }}
+  drift-detected:
+    description: 'Whether baseline drift was detected'
+    value: ${{ steps.lint.outputs.drift_detected }}
+  violations-count:
+    description: 'Total number of new violations'
+    value: ${{ steps.lint.outputs.violations_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Setup Python
+      if: inputs.backend == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Cache node modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ inputs.working-directory }}/node_modules
+          ${{ inputs.working-directory }}/frontend/node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}
+        restore-keys: ${{ runner.os }}-node-
+
+    - name: Cache Python venv
+      if: inputs.backend == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.working-directory }}/.venv
+        key: ${{ runner.os }}-venv-${{ inputs.python-version }}-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+        restore-keys: ${{ runner.os }}-venv-${{ inputs.python-version }}-
+
+    - name: Install frontend dependencies
+      if: inputs.frontend == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f "frontend/package.json" ]; then
+          cd frontend && npm ci --prefer-offline 2>/dev/null || npm install
+        elif [ -f "package.json" ]; then
+          npm ci --prefer-offline 2>/dev/null || npm install
+        fi
+
+    - name: Setup Python venv
+      if: inputs.backend == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ ! -d ".venv" ]; then
+          python -m venv .venv
+        fi
+        source .venv/bin/activate
+        pip install --quiet --upgrade pip
+        pip install --quiet ruff mypy
+        # Install project deps if available
+        for req in backend/requirements.txt requirements.txt; do
+          if [ -f "$req" ]; then
+            pip install --quiet -r "$req" 2>/dev/null || true
+            break
+          fi
+        done
+        deactivate
+
+    - name: Run progressive linting
+      id: lint
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GIMME_PROJECT_ROOT: ${{ inputs.working-directory }}
+      run: |
+        # Build args
+        ARGS=""
+        if [ "${{ inputs.mode }}" = "full" ]; then
+          ARGS="--all"
+        fi
+        if [ "${{ inputs.fix }}" = "true" ]; then
+          ARGS="$ARGS --fix"
+        fi
+        if [ "${{ inputs.frontend }}" = "false" ]; then
+          ARGS="$ARGS --backend-only"
+        fi
+        if [ "${{ inputs.backend }}" = "false" ]; then
+          ARGS="$ARGS --frontend-only"
+        fi
+
+        # Find gimme-the-lint scripts
+        SCRIPT_DIR=""
+        if [ -d "node_modules/@theglitchking/gimme-the-lint/scripts" ]; then
+          SCRIPT_DIR="node_modules/@theglitchking/gimme-the-lint/scripts"
+        elif [ -d "node_modules/gimme-the-lint/scripts" ]; then
+          SCRIPT_DIR="node_modules/gimme-the-lint/scripts"
+        fi
+
+        # Initialize outputs
+        echo "frontend_status=skip" >> $GITHUB_OUTPUT
+        echo "backend_status=skip" >> $GITHUB_OUTPUT
+        echo "drift_detected=false" >> $GITHUB_OUTPUT
+        echo "violations_count=0" >> $GITHUB_OUTPUT
+
+        FRONTEND_EXIT=0
+        BACKEND_EXIT=0
+
+        if [ -n "$SCRIPT_DIR" ]; then
+          # Use installed scripts
+          bash "$SCRIPT_DIR/run-checks.sh" $ARGS 2>&1 | tee /tmp/gimme-lint-output.log || true
+          FRONTEND_EXIT=${PIPESTATUS[0]}
+        else
+          # Inline linting (no gimme-the-lint installed, run tools directly)
+          echo "gimme-the-lint not found in node_modules, running linters directly"
+
+          # Frontend
+          if [ "${{ inputs.frontend }}" = "true" ]; then
+            if [ -d "frontend" ]; then
+              cd frontend
+              npx eslint src/ 2>&1 | tee -a /tmp/gimme-lint-output.log || FRONTEND_EXIT=$?
+              cd ..
+            elif [ -d "src" ]; then
+              npx eslint src/ 2>&1 | tee -a /tmp/gimme-lint-output.log || FRONTEND_EXIT=$?
+            fi
+          fi
+
+          # Backend
+          if [ "${{ inputs.backend }}" = "true" ]; then
+            if [ -f ".venv/bin/activate" ]; then
+              source .venv/bin/activate
+              BACKEND_TARGET=""
+              if [ -d "backend/app" ]; then
+                BACKEND_TARGET="backend/app"
+              elif [ -d "app" ]; then
+                BACKEND_TARGET="app"
+              fi
+              if [ -n "$BACKEND_TARGET" ]; then
+                ruff check "$BACKEND_TARGET" 2>&1 | tee -a /tmp/gimme-lint-output.log || BACKEND_EXIT=$?
+              fi
+              deactivate
+            fi
+          fi
+        fi
+
+        # Set outputs based on results
+        if [ "${{ inputs.frontend }}" = "true" ]; then
+          if [ $FRONTEND_EXIT -eq 0 ]; then
+            echo "frontend_status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_status=fail" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+        if [ "${{ inputs.backend }}" = "true" ]; then
+          if [ $BACKEND_EXIT -eq 0 ]; then
+            echo "backend_status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "backend_status=fail" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+        # Check for drift in output
+        if grep -q "Drift Detected" /tmp/gimme-lint-output.log 2>/dev/null; then
+          echo "drift_detected=true" >> $GITHUB_OUTPUT
+        fi
+
+        # Count violations
+        VIOLS=$(grep -c "error\|warning" /tmp/gimme-lint-output.log 2>/dev/null || echo "0")
+        echo "violations_count=$VIOLS" >> $GITHUB_OUTPUT
+
+        # Exit with failure if violations found
+        if [ $FRONTEND_EXIT -ne 0 ] || [ $BACKEND_EXIT -ne 0 ]; then
+          exit 1
+        fi
+
+    - name: Comment on PR
+      if: always() && inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let output = '';
+          try {
+            output = fs.readFileSync('/tmp/gimme-lint-output.log', 'utf8');
+          } catch { output = 'No lint output captured.'; }
+
+          const frontendStatus = '${{ steps.lint.outputs.frontend_status }}';
+          const backendStatus = '${{ steps.lint.outputs.backend_status }}';
+          const driftDetected = '${{ steps.lint.outputs.drift_detected }}';
+          const violations = '${{ steps.lint.outputs.violations_count }}';
+
+          const statusIcon = (s) => s === 'pass' ? ':white_check_mark:' : s === 'fail' ? ':x:' : ':fast_forward:';
+
+          let body = `## gimme-the-lint Results\n\n`;
+          body += `| Component | Status |\n|---|---|\n`;
+          body += `| Frontend (ESLint) | ${statusIcon(frontendStatus)} ${frontendStatus} |\n`;
+          body += `| Backend (Ruff) | ${statusIcon(backendStatus)} ${backendStatus} |\n`;
+          if (driftDetected === 'true') {
+            body += `\n:warning: **Baseline drift detected** - consider running \`gimme-the-lint baseline\`\n`;
+          }
+          if (parseInt(violations) > 0) {
+            body += `\n<details><summary>Lint Output (${violations} issues)</summary>\n\n\`\`\`\n${output.slice(-3000)}\n\`\`\`\n</details>\n`;
+          }
+          body += `\n---\n*Generated by [gimme-the-lint](https://github.com/TheGlitchKing/gimme-the-lint)*`;
+
+          // Find and update existing comment or create new
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c => c.body.includes('gimme-the-lint Results'));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }

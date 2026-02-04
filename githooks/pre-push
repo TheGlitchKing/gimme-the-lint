@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# gimme-the-lint: Pre-Push Hook
+# Runs full codebase lint before push (more thorough than pre-commit)
+# Bypass: git push --no-verify
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+
+SCRIPT=""
+if [ -f "${PROJECT_ROOT}/node_modules/@theglitchking/gimme-the-lint/scripts/run-checks.sh" ]; then
+    SCRIPT="${PROJECT_ROOT}/node_modules/@theglitchking/gimme-the-lint/scripts/run-checks.sh"
+elif [ -f "${PROJECT_ROOT}/node_modules/gimme-the-lint/scripts/run-checks.sh" ]; then
+    SCRIPT="${PROJECT_ROOT}/node_modules/gimme-the-lint/scripts/run-checks.sh"
+elif command -v gimme-the-lint &>/dev/null; then
+    GIMME_PROJECT_ROOT="$PROJECT_ROOT" gimme-the-lint check --all
+    exit $?
+fi
+
+if [ -z "$SCRIPT" ]; then
+    echo "gimme-the-lint: run-checks.sh not found, skipping"
+    exit 0
+fi
+
+echo "Running pre-push checks (gimme-the-lint --all)..."
+echo ""
+
+export GIMME_PROJECT_ROOT="$PROJECT_ROOT"
+
+if bash "$SCRIPT" --all; then
+    echo ""
+    echo "Pre-push checks passed!"
+    exit 0
+else
+    echo ""
+    echo "Pre-push checks failed. Fix violations before pushing."
+    echo "  gimme-the-lint check --fix --all"
+    echo ""
+    echo "  Bypass: git push --no-verify"
+    exit 1
+fi
