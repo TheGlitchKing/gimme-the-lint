@@ -359,17 +359,17 @@ When `comment-on-pr: true` is set, it posts a formatted summary as a PR comment 
 ## Roadmap
 
 ### v1.1 — Enhanced Linter Support
-- Additional Python linters (pylint, flake8)
-- Legacy JS linter support (TSLint)
+- Support for additional Python linters (pylint, flake8)
+- Support for legacy JS linters (TSLint)
 - Custom rule presets
-- Parallel directory processing
+- Parallel directory processing (lint multiple dirs concurrently)
 - Team dashboard (weekly health scorecard)
 
 ### v1.2 — Observability & Integrations
 - Web dashboard (localhost:3000/lint-dashboard)
 - VS Code extension integration
 - Slack/Discord notifications for CI failures
-- Drift history tracking (timeline of changes)
+- Drift history tracking (timeline of baseline changes)
 - Automated baseline refresh (scheduled via cron)
 
 ### v2.0 — Multi-Language & Enterprise
@@ -377,7 +377,7 @@ When `comment-on-pr: true` is set, it posts a formatted summary as a PR comment 
 - Cloud-based baseline storage
 - Team collaboration features
 - AI-powered violation triage (auto-prioritize fixes)
-- Cross-repo baseline sharing
+- Cross-repo baseline sharing (enterprise feature)
 
 ---
 
