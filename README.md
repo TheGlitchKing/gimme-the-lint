@@ -156,8 +156,8 @@ jobs:
 | `fix` | `false` | Auto-fix violations |
 | `frontend` | `true` | Enable ESLint checks |
 | `backend` | `true` | Enable Ruff checks |
-| `python-version` | `3.11` | Python version for backend |
-| `node-version` | `20` | Node.js version |
+| `python-version` | `3.13` | Python version for backend |
+| `node-version` | `22` | Node.js version |
 | `comment-on-pr` | `true` | Post results as PR comment |
 
 ### Action Outputs

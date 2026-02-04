@@ -26,7 +26,7 @@ for cmd in python3 python; do
         VERSION=$("$cmd" --version 2>&1 | grep -oP '\d+\.\d+')
         MAJOR=$(echo "$VERSION" | cut -d'.' -f1)
         MINOR=$(echo "$VERSION" | cut -d'.' -f2)
-        if [ "$MAJOR" -ge 3 ] && [ "$MINOR" -ge 8 ]; then
+        if [ "$MAJOR" -ge 3 ] && [ "$MINOR" -ge 11 ]; then
             PYTHON_CMD="$cmd"
             break
         fi
@@ -34,8 +34,8 @@ for cmd in python3 python; do
 done
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}✗ Python 3.8+ not found${NC}"
-    echo "  Please install Python 3.8 or later."
+    echo -e "${RED}✗ Python 3.11+ not found${NC}"
+    echo "  Please install Python 3.11 or later."
     exit 1
 fi
 
