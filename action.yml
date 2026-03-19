@@ -163,15 +163,21 @@ runs:
           # Inline linting (no gimme-the-lint installed, run tools directly)
           echo "gimme-the-lint not found in node_modules, running linters directly"
 
-          # Load directory config from gimme-the-lint.config.js if present
+          # Load directory config from gimme-the-lint.config.cjs or .js if present
           GIMME_FRONTEND_DIR=""
           GIMME_BACKEND_DIR=""
           GIMME_SRC_DIR=""
           GIMME_APP_DIR=""
-          if [ -f "gimme-the-lint.config.js" ]; then
+          GIMME_CONFIG=""
+          if [ -f "gimme-the-lint.config.cjs" ]; then
+            GIMME_CONFIG="$(pwd)/gimme-the-lint.config.cjs"
+          elif [ -f "gimme-the-lint.config.js" ]; then
+            GIMME_CONFIG="$(pwd)/gimme-the-lint.config.js"
+          fi
+          if [ -n "$GIMME_CONFIG" ]; then
             eval "$(node -e "
               try {
-                const cfg = require('$(pwd)/gimme-the-lint.config.js');
+                const cfg = require('${GIMME_CONFIG}');
                 if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
                 if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
                 if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);

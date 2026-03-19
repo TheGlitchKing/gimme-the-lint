@@ -22,11 +22,18 @@ NC='\033[0m'
 echo -e "${BLUE}gimme-the-lint: ESLint Baseline Creator (Directory-Chunked)${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Load directory config from gimme-the-lint.config.js if present
-if [ -f "${PROJECT_ROOT}/gimme-the-lint.config.js" ]; then
+# Load directory config from gimme-the-lint.config.cjs or .js if present
+GIMME_CONFIG=""
+if [ -f "${PROJECT_ROOT}/gimme-the-lint.config.cjs" ]; then
+    GIMME_CONFIG="${PROJECT_ROOT}/gimme-the-lint.config.cjs"
+elif [ -f "${PROJECT_ROOT}/gimme-the-lint.config.js" ]; then
+    GIMME_CONFIG="${PROJECT_ROOT}/gimme-the-lint.config.js"
+fi
+
+if [ -n "$GIMME_CONFIG" ]; then
     eval "$(node -e "
       try {
-        const cfg = require('${PROJECT_ROOT}/gimme-the-lint.config.js');
+        const cfg = require('${GIMME_CONFIG}');
         if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
         if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
         if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);
