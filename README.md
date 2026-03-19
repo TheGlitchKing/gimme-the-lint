@@ -346,6 +346,23 @@ When `comment-on-pr: true` is set, it posts a formatted summary as a PR comment 
 | Frontend-only | `src/` | — | `src/` + `package.json`, no `backend/` |
 | Backend-only | — | `app/` | `app/` + `pyproject.toml`, no `frontend/` |
 
+### Custom Directory Configuration
+
+If your project doesn't follow the default directory layout, create a `gimme-the-lint.config.js` at your project root:
+
+```js
+module.exports = {
+  frontendDir: 'client',       // default: 'frontend'
+  backendDir: 'server',        // default: 'backend'
+  srcDir: 'lib',               // default: 'src'
+  appDir: 'core',              // default: 'app'
+};
+```
+
+All shell scripts (`run-checks.sh`, `eslint-baseline.sh`, `ruff-baseline.sh`, `dashboard.sh`) and the GitHub Action inline fallback read this config via a `node -e` snippet. Config values take priority over auto-detection, but if no config file exists the original auto-detection logic is used — so this is fully backward-compatible.
+
+Running `gimme-the-lint install` generates this file automatically based on your project structure. You can edit it afterward to match any non-standard layout.
+
 ### Requirements
 
 - **Node.js** >= 18.0.0

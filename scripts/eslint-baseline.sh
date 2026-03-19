@@ -22,8 +22,24 @@ NC='\033[0m'
 echo -e "${BLUE}gimme-the-lint: ESLint Baseline Creator (Directory-Chunked)${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Load directory config from gimme-the-lint.config.js if present
+if [ -f "${PROJECT_ROOT}/gimme-the-lint.config.js" ]; then
+    eval "$(node -e "
+      try {
+        const cfg = require('${PROJECT_ROOT}/gimme-the-lint.config.js');
+        if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
+        if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
+        if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);
+        if (cfg.appDir)      console.log('GIMME_APP_DIR='      + cfg.appDir);
+      } catch(e) {}
+    " 2>/dev/null || true)"
+fi
+
 # Detect frontend directory
-if [ -d "${PROJECT_ROOT}/frontend/src" ]; then
+if [ -n "$GIMME_FRONTEND_DIR" ] && [ -d "${PROJECT_ROOT}/${GIMME_FRONTEND_DIR}" ]; then
+    FRONTEND_DIR="${PROJECT_ROOT}/${GIMME_FRONTEND_DIR}"
+    SRC_DIR="${GIMME_SRC_DIR:-src}"
+elif [ -d "${PROJECT_ROOT}/frontend/src" ]; then
     FRONTEND_DIR="${PROJECT_ROOT}/frontend"
     SRC_DIR="src"
 elif [ -d "${PROJECT_ROOT}/src" ] && [ -f "${PROJECT_ROOT}/package.json" ]; then

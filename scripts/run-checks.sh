@@ -54,13 +54,29 @@ done
 
 cd "$PROJECT_ROOT"
 
+# Load directory config from gimme-the-lint.config.js if present
+if [ -f "${PROJECT_ROOT}/gimme-the-lint.config.js" ]; then
+    eval "$(node -e "
+      try {
+        const cfg = require('${PROJECT_ROOT}/gimme-the-lint.config.js');
+        if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
+        if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
+        if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);
+        if (cfg.appDir)      console.log('GIMME_APP_DIR='      + cfg.appDir);
+      } catch(e) {}
+    " 2>/dev/null || true)"
+fi
+
 # Detect project structure
 FRONTEND_DIR=""
 BACKEND_DIR=""
 FRONTEND_SRC=""
 BACKEND_APP=""
 
-if [ -d "frontend/src" ]; then
+if [ -n "$GIMME_FRONTEND_DIR" ] && [ -d "${PROJECT_ROOT}/${GIMME_FRONTEND_DIR}" ]; then
+    FRONTEND_DIR="$GIMME_FRONTEND_DIR"
+    FRONTEND_SRC="${GIMME_FRONTEND_DIR}/${GIMME_SRC_DIR:-src}"
+elif [ -d "frontend/src" ]; then
     FRONTEND_DIR="frontend"
     FRONTEND_SRC="frontend/src"
 elif [ -d "src" ] && [ -f "package.json" ]; then
@@ -68,7 +84,10 @@ elif [ -d "src" ] && [ -f "package.json" ]; then
     FRONTEND_SRC="src"
 fi
 
-if [ -d "backend/app" ]; then
+if [ -n "$GIMME_BACKEND_DIR" ] && [ -d "${PROJECT_ROOT}/${GIMME_BACKEND_DIR}" ]; then
+    BACKEND_DIR="$GIMME_BACKEND_DIR"
+    BACKEND_APP="${GIMME_BACKEND_DIR}/${GIMME_APP_DIR:-app}"
+elif [ -d "backend/app" ]; then
     BACKEND_DIR="backend"
     BACKEND_APP="backend/app"
 elif [ -d "app" ] && ([ -f "pyproject.toml" ] || [ -f "requirements.txt" ]); then

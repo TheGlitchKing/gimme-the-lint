@@ -37,4 +37,19 @@ When a commit fails due to linting violations:
 | `frontend/.lttf/` | Frontend baseline data |
 | `backend/.lttf-ruff/` | Backend baseline data |
 | `.baseline-manifest.json` | Manifest with metadata, drift tracking |
-| `gimme-the-lint.config.js` | Plugin configuration |
+| `gimme-the-lint.config.js` | Plugin configuration (directory paths) |
+
+## Custom Directory Configuration
+
+If the project uses non-standard directory names, `gimme-the-lint.config.js` controls where scripts look:
+
+```js
+module.exports = {
+  frontendDir: 'client',   // default: 'frontend'
+  backendDir: 'server',    // default: 'backend'
+  srcDir: 'lib',           // default: 'src'
+  appDir: 'core',          // default: 'app'
+};
+```
+
+Config values take priority over auto-detection. If no config exists, the original auto-detection is used.

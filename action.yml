@@ -163,14 +163,35 @@ runs:
           # Inline linting (no gimme-the-lint installed, run tools directly)
           echo "gimme-the-lint not found in node_modules, running linters directly"
 
+          # Load directory config from gimme-the-lint.config.js if present
+          GIMME_FRONTEND_DIR=""
+          GIMME_BACKEND_DIR=""
+          GIMME_SRC_DIR=""
+          GIMME_APP_DIR=""
+          if [ -f "gimme-the-lint.config.js" ]; then
+            eval "$(node -e "
+              try {
+                const cfg = require('$(pwd)/gimme-the-lint.config.js');
+                if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
+                if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
+                if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);
+                if (cfg.appDir)      console.log('GIMME_APP_DIR='      + cfg.appDir);
+              } catch(e) {}
+            " 2>/dev/null || true)"
+          fi
+
           # Frontend
           if [ "${{ inputs.frontend }}" = "true" ]; then
-            if [ -d "frontend" ]; then
-              cd frontend
-              npx eslint src/ 2>&1 | tee -a /tmp/gimme-lint-output.log || FRONTEND_EXIT=$?
-              cd ..
+            FRONTEND_TARGET=""
+            if [ -n "$GIMME_FRONTEND_DIR" ] && [ -d "$GIMME_FRONTEND_DIR" ]; then
+              FRONTEND_TARGET="${GIMME_FRONTEND_DIR}/${GIMME_SRC_DIR:-src}"
+            elif [ -d "frontend" ]; then
+              FRONTEND_TARGET="frontend/src"
             elif [ -d "src" ]; then
-              npx eslint src/ 2>&1 | tee -a /tmp/gimme-lint-output.log || FRONTEND_EXIT=$?
+              FRONTEND_TARGET="src"
+            fi
+            if [ -n "$FRONTEND_TARGET" ] && [ -d "$FRONTEND_TARGET" ]; then
+              npx eslint "$FRONTEND_TARGET/" 2>&1 | tee -a /tmp/gimme-lint-output.log || FRONTEND_EXIT=$?
             fi
           fi
 
@@ -179,7 +200,9 @@ runs:
             if [ -f ".venv/bin/activate" ]; then
               source .venv/bin/activate
               BACKEND_TARGET=""
-              if [ -d "backend/app" ]; then
+              if [ -n "$GIMME_BACKEND_DIR" ] && [ -d "$GIMME_BACKEND_DIR" ]; then
+                BACKEND_TARGET="${GIMME_BACKEND_DIR}/${GIMME_APP_DIR:-app}"
+              elif [ -d "backend/app" ]; then
                 BACKEND_TARGET="backend/app"
               elif [ -d "app" ]; then
                 BACKEND_TARGET="app"

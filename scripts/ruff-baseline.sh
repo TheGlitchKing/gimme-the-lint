@@ -22,8 +22,24 @@ NC='\033[0m'
 echo -e "${BLUE}gimme-the-lint: Ruff Baseline Creator (Directory-Chunked)${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Load directory config from gimme-the-lint.config.js if present
+if [ -f "${PROJECT_ROOT}/gimme-the-lint.config.js" ]; then
+    eval "$(node -e "
+      try {
+        const cfg = require('${PROJECT_ROOT}/gimme-the-lint.config.js');
+        if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
+        if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
+        if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);
+        if (cfg.appDir)      console.log('GIMME_APP_DIR='      + cfg.appDir);
+      } catch(e) {}
+    " 2>/dev/null || true)"
+fi
+
 # Detect backend directory
-if [ -d "${PROJECT_ROOT}/backend/app" ]; then
+if [ -n "$GIMME_BACKEND_DIR" ] && [ -d "${PROJECT_ROOT}/${GIMME_BACKEND_DIR}" ]; then
+    BACKEND_DIR="${PROJECT_ROOT}/${GIMME_BACKEND_DIR}"
+    APP_DIR="${GIMME_APP_DIR:-app}"
+elif [ -d "${PROJECT_ROOT}/backend/app" ]; then
     BACKEND_DIR="${PROJECT_ROOT}/backend"
     APP_DIR="app"
 elif [ -d "${PROJECT_ROOT}/app" ]; then
