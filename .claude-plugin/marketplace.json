@@ -1,0 +1,47 @@
+{
+  "name": "gimme-the-lint-marketplace",
+  "owner": {
+    "name": "TheGlitchKing",
+    "email": "theglitchking@users.noreply.github.com"
+  },
+  "metadata": {
+    "description": "Official marketplace for gimme-the-lint - Progressive linting with directory-chunked baselines and drift detection",
+    "version": "1.1.2"
+  },
+  "plugins": [
+    {
+      "name": "gimme-the-lint",
+      "description": "Progressive linting system with directory-chunked baselines, drift detection, and auto-healing for monorepo projects (Python + JS/TS)",
+      "version": "1.1.2",
+      "author": {
+        "name": "TheGlitchKing"
+      },
+      "homepage": "https://github.com/TheGlitchKing/gimme-the-lint",
+      "repository": "https://github.com/TheGlitchKing/gimme-the-lint.git",
+      "license": "MIT",
+      "keywords": [
+        "linting",
+        "progressive-linting",
+        "eslint",
+        "ruff",
+        "python",
+        "monorepo",
+        "git-hooks",
+        "drift-detection",
+        "claude-code"
+      ],
+      "category": "productivity",
+      "tags": [
+        "linting",
+        "progressive",
+        "baseline",
+        "drift"
+      ],
+      "source": {
+        "source": "npm",
+        "package": "@theglitchking/gimme-the-lint"
+      },
+      "strict": true
+    }
+  ]
+}
