@@ -1,3 +1,7 @@
+---
+description: Run progressive linting checks on the current project (only NEW violations above the baseline are flagged)
+---
+
 # /lint - Progressive Linting
 
 Run progressive linting checks on the current project. Only NEW violations are flagged — baseline violations are ignored.

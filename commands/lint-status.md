@@ -1,3 +1,7 @@
+---
+description: Show the progressive linting dashboard — baseline status, drift detection, and team ownership across all tracked directories
+---
+
 # /lint:status - Progressive Linting Dashboard
 
 Show the current state of progressive linting across the codebase.

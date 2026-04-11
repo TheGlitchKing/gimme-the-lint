@@ -1,3 +1,7 @@
+---
+description: Create or refresh LTTF linting baselines (captures existing violations so only NEW ones block future commits)
+---
+
 # /lint:baseline - Create or Refresh Baselines
 
 Create LTTF baselines for progressive linting. Baselines capture existing violations so only NEW violations block commits.
