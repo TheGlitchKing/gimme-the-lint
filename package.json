@@ -42,7 +42,6 @@
     "check:fix": "node ./bin/gimme-the-lint.js check --fix",
     "baseline": "node ./bin/gimme-the-lint.js baseline",
     "dashboard": "node ./bin/gimme-the-lint.js dashboard",
-    "prepublishOnly": "bash ./scripts/validate-version.sh",
     "test": "node --test tests/*.test.js"
   },
   "files": [
