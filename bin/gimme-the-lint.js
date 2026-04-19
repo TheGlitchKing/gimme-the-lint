@@ -213,8 +213,23 @@ program
     program.help();
   });
 
-program.parse(process.argv);
+// Runtime-provided subcommands: update, policy, status, relink.
+// Loaded dynamically because the runtime is ESM and this file is CJS.
+(async () => {
+  try {
+    const { registerUpdateCommands } = await import('@theglitchking/claude-plugin-runtime');
+    registerUpdateCommands(program, {
+      packageName: '@theglitchking/gimme-the-lint',
+      pluginName: 'gimme-the-lint',
+      configFile: 'gimme-the-lint.json',
+    });
+  } catch (err) {
+    // Runtime not available — degrade silently; existing subcommands still work.
+  }
 
-if (!process.argv.slice(2).length) {
-  program.help();
-}
+  program.parse(process.argv);
+
+  if (!process.argv.slice(2).length) {
+    program.help();
+  }
+})();

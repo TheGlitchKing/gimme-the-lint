@@ -1,0 +1,15 @@
+{
+  "description": "gimme-the-lint update-check hook — nudges/auto-updates per policy.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

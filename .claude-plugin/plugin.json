@@ -1,7 +1,7 @@
 {
   "name": "gimme-the-lint",
   "description": "Progressive linting system with directory-chunked baselines, drift detection, and auto-healing for monorepo projects (Python + JS/TS)",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "author": {
     "name": "TheGlitchKing",
     "email": "theglitchking@users.noreply.github.com"
