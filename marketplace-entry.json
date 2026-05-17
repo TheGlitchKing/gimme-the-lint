@@ -3,8 +3,8 @@
   "name": "gimme-the-lint",
   "displayName": "Gimme The Lint",
   "type": "claude-plugin",
-  "version": "1.0.0",
-  "description": "Progressive linting with directory-chunked baselines, drift detection, and auto-healing for monorepo projects (Python + JS/TS)",
+  "version": "2.0.0",
+  "description": "Polyglot progressive linting for monorepos — adapter-driven baselines, per-app drift detection, and idempotent skips across JavaScript/TypeScript, Python, Go, and Rust.",
   "author": {
     "name": "TheGlitchKing"
   },
@@ -44,8 +44,8 @@
     }
   },
   "category": "productivity",
-  "tags": ["linting", "progressive-linting", "eslint", "ruff", "python", "monorepo", "git-hooks", "drift-detection", "github-action", "claude-plugin"],
-  "keywords": ["linting", "progressive", "baseline", "eslint", "ruff", "python", "javascript", "typescript", "monorepo", "drift-detection", "auto-healing", "git-hooks", "github-action"],
+  "tags": ["linting", "progressive-linting", "polyglot", "monorepo", "git-hooks", "drift-detection", "github-action", "claude-plugin", "eslint", "ruff", "golangci-lint", "clippy"],
+  "keywords": ["linting", "progressive", "baseline", "drift-detection", "polyglot", "monorepo", "git-hooks", "github-action", "eslint", "ruff", "golangci-lint", "go", "clippy", "rust", "python", "javascript", "typescript"],
   "license": "MIT",
   "homepage": "https://github.com/TheGlitchKing/gimme-the-lint",
   "status": "production-ready",

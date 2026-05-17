@@ -5,14 +5,14 @@
     "email": "theglitchking@users.noreply.github.com"
   },
   "metadata": {
-    "description": "Official marketplace for gimme-the-lint - Progressive linting with directory-chunked baselines and drift detection",
-    "version": "1.2.0"
+    "description": "Official marketplace for gimme-the-lint - polyglot progressive linting with per-app baselines and drift detection",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "gimme-the-lint",
-      "description": "Progressive linting system with directory-chunked baselines, drift detection, and auto-healing for monorepo projects (Python + JS/TS)",
-      "version": "1.2.0",
+      "description": "Polyglot progressive linting for monorepos — adapter-driven baselines, per-app drift detection, and idempotent skips across JavaScript/TypeScript, Python, Go, and Rust.",
+      "version": "2.0.0",
       "author": {
         "name": "TheGlitchKing"
       },
@@ -22,12 +22,14 @@
       "keywords": [
         "linting",
         "progressive-linting",
-        "eslint",
-        "ruff",
-        "python",
+        "polyglot",
         "monorepo",
         "git-hooks",
         "drift-detection",
+        "eslint",
+        "ruff",
+        "golangci-lint",
+        "clippy",
         "claude-code"
       ],
       "category": "productivity",
