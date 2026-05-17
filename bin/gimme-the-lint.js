@@ -154,6 +154,7 @@ program
   .description('Create or refresh progressive-lint baselines')
   .option('--strict', 'Fail when a linter is missing for code that is present')
   .option('--empty', 'Write empty baselines (greenfield: treat every violation as new)')
+  .option('--allow-incomplete', 'Exit 0 even if some linters could not be baselined')
   .action(async (target, opts) => {
     const chalk = require('chalk');
     const { runBaseline } = require('../lib/baseline');
@@ -166,6 +167,17 @@ program
       });
       console.log(formatBaselineReport(report, process.cwd()));
       console.log('');
+      // A baseline that could not capture a linter is incomplete — fail loudly
+      // rather than reporting success, unless the user opts in.
+      if (report.incomplete && report.incomplete.length && !opts.allowIncomplete) {
+        console.error(
+          chalk.red(
+            `✗ Baseline INCOMPLETE — ${report.incomplete.length} linter(s) not captured. ` +
+              'Install them and re-run, or pass --allow-incomplete.\n'
+          )
+        );
+        process.exit(1);
+      }
     } catch (err) {
       console.error(chalk.red(`\n✗ ${err.message}\n`));
       process.exit(1);
@@ -176,6 +188,7 @@ program
   .command('migrate')
   .description('Migrate a v1 (.lttf) project to the v2 .gtl/ layout')
   .option('--strict', 'Fail when a linter is missing for code that is present')
+  .option('--allow-incomplete', 'Exit 0 even if some linters could not be baselined')
   .action(async (opts) => {
     const chalk = require('chalk');
     const { migrate } = require('../lib/migrate');
@@ -188,9 +201,46 @@ program
       console.log(chalk.green('\n✓ Migrated to the v2 .gtl/ layout\n'));
       console.log(`  Legacy baselines backed up: ${result.backedUp.join(', ')}`);
       console.log(chalk.dim(`    → ${result.backupPath}`));
+      if (result.appsConfig && result.appsConfig.created) {
+        console.log(
+          `  Wrote explicit app map → ${path.basename(result.appsConfig.path)}`
+        );
+      }
       console.log(`  Re-baselined ${result.baseline.unitCount} app(s) into .gtl/`);
+      for (const w of result.discoveryWarnings || []) {
+        console.log(chalk.yellow(`  ⚠ ${w}`));
+      }
       console.log('');
-      console.log('Next: review the new .gtl/ directory and commit it.');
+
+      // An incomplete baseline must never be reported as a clean migration.
+      if (result.incomplete && result.incomplete.length) {
+        console.error(
+          chalk.red(`✗ ${result.incomplete.length} linter(s) were NOT baselined:`)
+        );
+        for (const i of result.incomplete) {
+          console.error(chalk.red(`    ${i.app} · ${i.linter} (${i.status})`));
+        }
+        console.error(
+          chalk.yellow(
+            '  The baseline is INCOMPLETE — install the missing linters and run\n' +
+              '  `gimme-the-lint baseline`, then commit .gtl/.'
+          )
+        );
+        if (!opts.allowIncomplete) {
+          console.error(
+            chalk.red(
+              '\n✗ Migration finished with an incomplete baseline ' +
+                '(pass --allow-incomplete to accept).\n'
+            )
+          );
+          process.exit(1);
+        }
+        console.log('');
+      }
+
+      console.log(
+        'Next: review the new .gtl/ directory and gimme-the-lint.config.js, then commit them.'
+      );
       console.log('');
     } catch (err) {
       console.error(chalk.red(`\n✗ Migration failed: ${err.message}\n`));
@@ -210,13 +260,43 @@ program
 program
   .command('hooks')
   .description('Install git hooks for pre-commit linting')
-  .action(async () => {
+  .option('--force', 'Install even when the baseline is incomplete')
+  .action(async (opts) => {
     const chalk = require('chalk');
     const gitHooksManager = require('../lib/git-hooks-manager');
+    const { findIncompleteBaselines } = require('../lib/baseline');
 
     try {
+      // Refuse to gate commits against an incomplete baseline: hooks would
+      // diff against linter sections that were never captured, so every
+      // pre-existing violation would count as new and block the commit.
+      const incomplete = await findIncompleteBaselines(process.cwd());
+      if (incomplete.length && !opts.force) {
+        console.error(
+          chalk.red('\n✗ Refusing to install hooks — the baseline is incomplete:\n')
+        );
+        for (const i of incomplete) {
+          console.error(chalk.red(`    ${i.app} · ${i.linter} (${i.status})`));
+        }
+        console.error(
+          chalk.yellow(
+            '\n  These linters were never baselined, so a pre-commit hook would\n' +
+              '  flag every pre-existing violation as new. Install the missing\n' +
+              '  linters and run `gimme-the-lint baseline`, or pass --force.\n'
+          )
+        );
+        process.exit(1);
+      }
+
       const installed = await gitHooksManager.installHooks(process.cwd());
       console.log(chalk.green(`\n✓ Installed git hooks: ${installed.join(', ')}\n`));
+      if (incomplete.length && opts.force) {
+        console.log(
+          chalk.yellow(
+            '⚠ Installed against an INCOMPLETE baseline (--force) — re-baseline soon.\n'
+          )
+        );
+      }
     } catch (e) {
       console.error(chalk.red(`\n✗ ${e.message}\n`));
       process.exit(1);

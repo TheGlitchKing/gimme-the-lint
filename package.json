@@ -1,6 +1,6 @@
 {
   "name": "@theglitchking/gimme-the-lint",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Polyglot progressive linting for monorepos — adapter-driven baselines, per-app drift detection, and idempotent skips across JavaScript/TypeScript, Python, Go, Rust, Terraform, and Ansible.",
   "keywords": [
     "linting",
