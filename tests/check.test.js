@@ -130,16 +130,20 @@ describe('check / baseline orchestration', () => {
     fakeState.available = true;
   });
 
-  it('baseline records skipped status when the linter is unavailable', async () => {
+  it('baseline records UNAVAILABLE (not skipped) when the linter is missing', async () => {
     fakeState.available = false;
     const report = await runBaseline(TMP);
-    assert.strictEqual(report.units[0].sections[0].status, 'skipped');
+    // Bug C: an unavailable linter must NOT be recorded as a clean/skipped
+    // baseline — it is an incomplete baseline and must stay distinguishable.
+    assert.strictEqual(report.units[0].sections[0].status, 'unavailable');
+    assert.strictEqual(report.incomplete.length, 1);
+    assert.strictEqual(report.incomplete[0].linter, 'fake');
     const stored = await baselineStore.readBaseline(
       path.join(TMP, '.gtl', 'apps', 'root', 'baseline.json')
     );
     assert.strictEqual(
       baselineStore.getLinterSection(stored, 'fake').status,
-      'skipped'
+      baselineStore.STATUS.UNAVAILABLE
     );
     fakeState.available = true;
   });

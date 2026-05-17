@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-05-17
+
+### Fixed
+- **Bug A — monorepo linter binary resolution.** The ESLint and Biome adapters
+  resolved `node_modules/.bin/<linter>` only at the repo root, so in a monorepo
+  (where each JS app carries its own `node_modules`) `available()` returned
+  false and the linter was silently skipped — capturing an empty baseline.
+  Adapters now resolve the binary app-dir-first (app → repo root → PATH) and
+  run inside the app directory so the app's own flat config is discovered. The
+  Ruff adapter resolves its `.venv` the same way.
+- **Bug B — discovery bound the wrong directories.** Manifest discovery treated
+  a bare `requirements.txt` as a ruff app marker (binding nested load-test and
+  utility dirs) and discarded a repo-root config whenever any nested manifest
+  existed (leaving the real app unbound). `requirements.txt` is no longer a
+  discovery marker — `pyproject.toml`, `ruff.toml`, `.ruff.toml` and `setup.py`
+  are — and workspace-root detection is now **per linter**, so a repo-root
+  `[tool.ruff]` config binds the root even when nested `package.json` apps sit
+  below it.
+- **Bug C — "couldn't run" collapsed into "skipped".** An unavailable or
+  errored linter was recorded with the status used for "no code here", making
+  an incomplete baseline indistinguishable from a clean one — every
+  pre-existing violation later counted as new and blocked the commit. New
+  baseline statuses `unavailable` and `error` keep incomplete baselines
+  distinct; `migrate` and `baseline` print a prominent summary and exit
+  non-zero (override with `--allow-incomplete`); `hooks` refuses to install
+  against an incomplete baseline (override with `--force`); `check` reports
+  `needs-baseline` instead of flooding new violations.
+
+### Added
+- `migrate` now writes the discovered app/linter layout into
+  `gimme-the-lint.config.js` as an explicit `apps` map, so the guess is visible
+  and editable instead of silently re-derived on every run. It also emits a
+  warning when the layout is ambiguous (a repo-root config plus nested apps).
+
 ## [2.2.0] - 2026-05-17
 
 ### Added

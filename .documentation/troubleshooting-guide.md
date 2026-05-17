@@ -104,6 +104,31 @@ package, or re-run with `--force`.
 from `templates/clippy-cargo-lints.template.toml` yourself. For a workspace, the
 table belongs in the root `Cargo.toml` under `[workspace.lints.clippy]`.
 
+## `migrate` / `baseline` exited non-zero — "baseline is INCOMPLETE"
+
+A linter that applies to an app could not run — it is not installed
+(`unavailable`) or it errored. That linter was **not** baselined, so gating
+commits against the baseline would flag every pre-existing violation as new.
+`migrate` and `baseline` now fail loudly instead of reporting a false success.
+
+Fix it: install the missing linter(s) named in the summary, then re-run
+`gimme-the-lint baseline`. To accept an incomplete baseline deliberately, pass
+`--allow-incomplete`.
+
+## `hooks` refuses to install — "the baseline is incomplete"
+
+Same cause: some linters were never baselined. Installing hooks would gate
+commits against an incomplete baseline. Install the missing linters and re-run
+`gimme-the-lint baseline`, or pass `gimme-the-lint hooks --force` to install
+anyway (and re-baseline as soon as the linters are available).
+
+## `check` reports "NEEDS BASELINE"
+
+The baseline for that linter was captured while the linter was unavailable, so
+it is incomplete. Now that the linter runs, re-capture it: `gimme-the-lint
+baseline`. `check` deliberately warns rather than flooding the run with "new"
+violations.
+
 ## Reset everything
 
 Delete `.gtl/` and run `gimme-the-lint baseline` to rebuild from scratch.
