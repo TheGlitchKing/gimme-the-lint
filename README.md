@@ -8,407 +8,281 @@
 
 ## Summary
 
-Most code projects use linters to catch mistakes and keep code clean. The problem is that when you add a linter to a project that already has a lot of code, the linter finds hundreds or even thousands of old problems. This makes it impossible to turn on linting without fixing everything first, so teams just never do it. **gimme-the-lint** solves this by remembering all the old problems and only blocking your work when you create a _new_ problem. Over time, your team can clean up the old stuff at its own pace while making sure no new messes get added.
+Most projects use linters to catch mistakes and keep code clean. The problem is
+that when you add a linter to a project that already has a lot of code, the
+linter finds hundreds — sometimes thousands — of old problems. Turning linting
+on would block every commit until someone fixes all of it, so teams just never
+do it. **gimme-the-lint** solves this by remembering the old problems and only
+blocking your work when you create a _new_ one. Your team cleans up the old
+stuff at its own pace; meanwhile no new mess gets in.
+
+**v2.0** generalizes that idea to any linter and any language. It is no longer
+"ESLint + Ruff for webapps" — it is a progressive-lint **engine** with a
+pluggable **linter adapter** for each tool, across **JavaScript/TypeScript, Python,
+Go, and Rust**, in **any monorepo shape**.
 
 ---
 
-## Operational Summary
+## How it works
 
-gimme-the-lint works by creating "baselines" — snapshots of every existing lint violation in your project, organized by directory. When you make a commit, it compares the current violations against the baseline. If the only violations it finds are ones that were already there before, the commit goes through. If you introduced something new, the commit is blocked and you're told exactly what to fix.
+gimme-the-lint creates **baselines** — snapshots of every existing violation,
+stored per app under `.gtl/`. On each run it lints, then asks one question of
+every violation: _is this new, or was it already baselined?_ Only new violations
+block.
 
-Under the hood, the plugin auto-discovers your project's production directories (skipping test folders), generates per-directory baseline files using ESLint (for JavaScript/TypeScript) and Ruff (for Python), and stores a manifest file with an MD5 hash of your linter config. On every run it checks for "drift" — whether directories were added or removed, whether config files changed, or whether baselines are getting stale. When drift is found, it warns you and can auto-heal itself the next time you refresh baselines. The entire system runs through git hooks (pre-commit and pre-push), a CLI, a GitHub Action, or Claude Code slash commands.
+The trick is the **fingerprint**. Each violation is identified by
+`file + rule + message` — deliberately **not** by line number. So a baselined
+violation survives code moving up or down a file; only a genuinely new problem
+is ever flagged. (In v1 this job was outsourced to the third-party
+`lint-to-the-future`; v2 owns it, which is what makes every linter equal.)
+
+Each app is bound to the linters its package manifest implies — `package.json`
+→ ESLint, `pyproject.toml` → Ruff, `go.mod` → golangci-lint, `Cargo.toml` →
+Clippy, `biome.json` → Biome. Drift detection runs per app, so a config or
+linter-version change in one app never churns the baselines of another.
 
 ---
 
 ## Features
 
-- **Progressive Linting** — Only new violations block commits; old ones are baselined and tracked
-- **Directory-Chunked Auto-Discovery** — Automatically finds production directories; no config needed
-- **Manifest-Based Drift Detection** — Catches directory drift, config drift, time drift, and violation drift
-- **Auto-Healing** — Manifests self-update when you re-run baselines
-- **Python .venv Management** — Auto-creates a virtual environment with ruff and mypy
-- **Git Hooks** — Pre-commit checks changed files (~30s), pre-push checks everything
-- **GitHub Action** — CI/CD integration that posts results as PR comments
-- **Claude Code Plugin** — `/lint`, `/lint:status`, `/lint:baseline` slash commands
-- **LLM-Optimized Output** — Pre-commit failures include instructions that tell Claude Code to auto-fix without asking
-- **Monorepo Support** — Works with Python backends, JS/TS frontends, or both together
-- **Auto-Fix** — Pass `--fix` to automatically correct violations where possible
-- **Config Templates** — Ships with ready-to-use ESLint v9, Ruff, Gitleaks, CommitLint, and pre-commit configs
+- **Progressive linting** — only new violations block; existing ones are baselined
+- **In-house diff engine** — line/column-independent fingerprints survive code shifts
+- **Pluggable linter adapters** — the choice of linter is config, not a hardcode
+- **Polyglot** — JavaScript/TypeScript, Python, Go, Rust out of the box
+- **Per-app model** — auto-discovers every package in a monorepo; no `frontend/`
+  + `backend/` assumption
+- **Per-app drift detection** — app add/remove, config change, linter version, age
+- **Idempotent skips** — an app with code but no installed linter is warn-skipped
+  (never blocks) — or fails loudly under `--strict`
+- **Offline install** — air-gapped mode for regulated environments
+- **Greenfield mode** — "strict from day one" with empty baselines
+- **Git hooks, CLI, GitHub Action, Claude Code plugin** — one engine, four front doors
+- **LLM-optimized output** — failures tell Claude Code to auto-fix without asking
+
+## Supported linters
+
+| Language | Linter | Bound by |
+|----------|--------|----------|
+| JavaScript / TypeScript | `eslint` | `package.json` |
+| JavaScript / TypeScript | `biome` | `biome.json` (supersedes ESLint) |
+| Python | `ruff` | `pyproject.toml`, `requirements.txt`, `setup.py` |
+| Go | `golangci-lint` | `go.mod` |
+| Rust | `clippy` (`cargo clippy`) | `Cargo.toml` |
 
 ---
 
 ## Quick Start
 
-### 1. Installation
-
-#### npm (Local — Recommended)
-
-Install the plugin as a dev dependency in your project. This is the best option for teams because everyone who clones the repo gets it automatically.
+### Install
 
 ```bash
-npm install @theglitchking/gimme-the-lint --save-dev
-```
-
-After installing, initialize the plugin. This detects your project type, copies linting configs, sets up a Python environment (if needed), and installs git hooks:
-
-```bash
+# Local (recommended — every teammate gets it on clone)
+npm install --save-dev @theglitchking/gimme-the-lint
 npx gimme-the-lint install
-```
 
-#### npm (Global)
-
-If you want the `gimme-the-lint` command available everywhere on your machine (not tied to a single project), install it globally:
-
-```bash
+# Global
 npm install -g @theglitchking/gimme-the-lint
-```
-
-Then navigate to any project and run:
-
-```bash
 gimme-the-lint install
-```
 
-#### One-Line Install (curl)
-
-If you don't want to think about npm at all, this single command downloads and installs everything globally:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/TheGlitchKing/gimme-the-lint/main/install.sh | bash
-```
-
-Then navigate to your project and run `gimme-the-lint install` to set it up.
-
-#### Claude Code Plugin Install
-
-If you're using Claude Code, you can install the plugin directly from the Glitch Kingdom marketplace. In your Claude Code session, run:
-
-```
+# Claude Code plugin
 /plugin install TheGlitchKing/gimme-the-lint
 ```
 
-After the plugin is installed, initialize it in your project:
+### First-time setup on an existing project
 
-```
-/lint
+```bash
+npx gimme-the-lint install      # writes configs + git hooks
+npx gimme-the-lint baseline     # captures existing violations as baselines
+npx gimme-the-lint dashboard    # see what is baselined and any drift
 ```
 
-The `/lint` command will detect if the plugin hasn't been set up yet and walk you through initialization. You can also run the CLI manually with `npx gimme-the-lint install` if you prefer.
+From here, every commit is linted — but only your **new** code is held to the
+rules. Commit the `.gtl/` directory so the whole team shares the baseline.
+
+### Day to day
+
+The pre-commit hook fires on `git commit`. If you introduced a new violation it
+blocks the commit and shows exactly what to fix:
+
+```bash
+gimme-the-lint check --fix      # auto-fix what the linter can
+git add -A && git commit -m "…" # retry
+```
 
 ---
 
-### 2. How to Use
-
-#### CLI Commands
+## CLI
 
 | Command | Description |
 |---------|-------------|
-| `gimme-the-lint install` | Set up configs, templates, Python venv, and git hooks |
-| `gimme-the-lint init` | Alias for `install` |
-| `gimme-the-lint check` | Run progressive linting on changed files |
-| `gimme-the-lint check --fix` | Auto-fix violations where possible |
-| `gimme-the-lint check --all` | Lint the entire codebase, not just changed files |
-| `gimme-the-lint check --frontend-only` | Only lint JavaScript/TypeScript files |
-| `gimme-the-lint check --backend-only` | Only lint Python files |
-| `gimme-the-lint check --verbose` | Show detailed output during linting |
-| `gimme-the-lint baseline` | Create or refresh baselines for both frontend and backend |
-| `gimme-the-lint baseline frontend` | Create or refresh frontend baselines only |
-| `gimme-the-lint baseline backend` | Create or refresh backend baselines only |
-| `gimme-the-lint dashboard` | Show the linting status dashboard with drift detection |
+| `gimme-the-lint install` | Write configs and set up the project |
+| `gimme-the-lint install --offline` | Air-gapped install — no npm/pip fetches |
+| `gimme-the-lint install --no-baseline` | Greenfield — empty baselines, strict from day one |
+| `gimme-the-lint baseline` | Capture/refresh baselines for every app |
+| `gimme-the-lint baseline --empty` | Write empty baselines (greenfield) |
+| `gimme-the-lint check` | Lint files staged for commit |
+| `gimme-the-lint check --all` | Lint every app, not just staged changes |
+| `gimme-the-lint check --fix` | Auto-fix where the linter supports it |
+| `gimme-the-lint check --strict` | Fail if a linter is missing for present code |
+| `gimme-the-lint dashboard` | Per-app baseline status + drift |
+| `gimme-the-lint migrate` | Migrate a v1 (`.lttf`) project to the v2 `.gtl/` layout |
 | `gimme-the-lint hooks` | Install pre-commit and pre-push git hooks |
-| `gimme-the-lint venv setup` | Create the Python virtual environment and install tools |
-| `gimme-the-lint venv status` | Show Python venv status (path, versions) |
-| `gimme-the-lint status` | Show overall plugin status (project type, hooks, venv, config) |
-| `gimme-the-lint uninstall` | Remove the plugin from the project (hooks and config) |
-
-#### CLI Examples
-
-**First-time setup on an existing project:**
-
-You just joined a team with a large codebase that has never had linting. Run these commands to get started without breaking anything:
-
-```bash
-npx gimme-the-lint install        # Sets up configs and venv
-npx gimme-the-lint baseline       # Captures all existing violations
-npx gimme-the-lint hooks          # Installs git hooks
-npx gimme-the-lint dashboard      # See the current state
-```
-
-From now on, every commit you make will be linted — but only your _new_ code is checked against the rules.
-
-**Day-to-day development:**
-
-You don't need to run anything manually. The pre-commit hook fires automatically when you `git commit`. If it finds new violations, it blocks the commit and shows you what to fix:
-
-```bash
-git add .
-git commit -m "feat: add user dashboard"
-# Hook fires → if violations found, it tells you what to fix
-
-# To auto-fix and retry:
-npx gimme-the-lint check --fix
-git add .
-git commit -m "feat: add user dashboard"
-```
-
-**Checking the full codebase before a release:**
-
-```bash
-npx gimme-the-lint check --all --verbose
-```
-
-This lints every production file (not just changed ones) and shows detailed output. Use this before merging to main or tagging a release.
-
-**When a teammate adds a new directory:**
-
-If someone adds `frontend/src/analytics/`, the next time anyone runs a lint check, the dashboard will warn about "directory drift." To fix it:
-
-```bash
-npx gimme-the-lint baseline       # Re-scans directories and updates manifests
-```
-
-**Scoping checks to one side of a monorepo:**
-
-```bash
-npx gimme-the-lint check --frontend-only    # Skip Python checks
-npx gimme-the-lint check --backend-only     # Skip ESLint checks
-```
+| `gimme-the-lint status` | Overall plugin status |
+| `gimme-the-lint uninstall` | Remove hooks and config |
 
 ---
 
-#### Claude Code Commands
+## Configuration
 
-| Command | Description |
-|---------|-------------|
-| `/lint` | Run progressive linting checks on the current project |
-| `/lint:status` | Show the linting dashboard with drift detection warnings |
-| `/lint:baseline` | Create or refresh linting baselines |
-
-#### Claude Code Examples
-
-**Running a lint check during a coding session:**
-
-While Claude Code is helping you write code, you can run `/lint` at any time to check if your changes introduce new violations. Claude will run the check, interpret the results, and either confirm everything is clean or show you exactly what to fix.
-
-```
-/lint
-```
-
-**When Claude's commit gets blocked by the pre-commit hook:**
-
-If Claude attempts a `git commit` and the pre-commit hook detects new violations, the hook output includes LLM-specific instructions. Claude will automatically run `gimme-the-lint check --fix`, re-stage the files, and retry the commit — without asking you. If auto-fix can't resolve everything, Claude will show you the remaining issues and ask what to do.
-
-**Checking project health:**
-
-Use `/lint:status` to get a quick overview of your project's linting state. This shows baseline ages, drift warnings, violation counts, and whether hooks are installed. It's useful at the start of a session to understand where things stand.
-
-```
-/lint:status
-```
-
-**Refreshing baselines after a big refactor:**
-
-After moving directories around or changing linter rules, run `/lint:baseline` to re-scan everything and update the manifests. This clears all drift warnings.
-
-```
-/lint:baseline
-```
-
----
-
-## Technical Details
-
-### File Structure
-
-```
-gimme-the-lint/
-├── package.json                     # npm package config (@theglitchking/gimme-the-lint)
-├── action.yml                       # GitHub Action (composite) for CI/CD
-├── install.sh                       # Curl-installable global install script
-├── uninstall.sh                     # Clean removal with hook backup restoration
-│
-├── bin/
-│   ├── gimme-the-lint.js            # CLI entry point (commander-based)
-│   └── postinstall.js               # Post-install welcome message
-│
-├── lib/
-│   ├── index.js                     # Re-exports all modules
-│   ├── directory-discovery.js       # Auto-discovers production dirs, excludes test dirs
-│   ├── manifest-manager.js          # Creates/reads/writes manifests with MD5 config hashes
-│   ├── drift-detector.js            # Detects 4 drift types, formats reports, auto-heals
-│   ├── venv-manager.js              # Python venv creation, dependency install, status
-│   ├── config-manager.js            # Template copying with {{substitutions}}, project detection
-│   ├── git-hooks-manager.js         # Hook install/uninstall with backup/restore
-│   └── installer.js                 # Full init flow orchestrator
-│
-├── scripts/
-│   ├── run-checks.sh                # Main progressive linting script (pre-commit entry)
-│   ├── dashboard.sh                 # Status dashboard with drift warnings
-│   ├── eslint-baseline.sh           # Frontend baseline creator with auto-discovery
-│   ├── ruff-baseline.sh             # Backend baseline creator with per-dir JSON baselines
-│   ├── setup-venv.sh                # Python venv setup with version checking
-│   └── validate-version.sh          # Pre-publish validation (changelog, license)
-│
-├── templates/
-│   ├── eslint.config.template.js    # ESLint v9 flat config (React, TS, import rules)
-│   ├── pyproject.template.toml      # Ruff + pytest + mypy + coverage config
-│   ├── .gitleaks.template.toml      # Secrets detection with API key patterns
-│   ├── commitlint.config.template.js# Conventional commits enforcement
-│   ├── .pre-commit-config.template.yaml # Pre-commit hooks (ruff, prettier, gitleaks)
-│   └── requirements.linting.txt     # Python deps: ruff, mypy, pytest, pytest-cov
-│
-├── githooks/
-│   ├── pre-commit                   # Changed-files lint (~30s), LLM instructions on fail
-│   ├── pre-push                     # Full codebase lint
-│   └── install.sh                   # Hook installer (copies to .git/hooks/)
-│
-├── .claude-plugin/
-│   ├── plugin.json                  # Plugin manifest (commands, agents, metadata)
-│   └── commands/
-│       ├── lint.md                  # /lint command with pre-commit workflow
-│       ├── lint-status.md           # /lint:status dashboard command
-│       └── lint-baseline.md         # /lint:baseline command
-│
-├── agents/
-│   └── linting-agent.md             # Background linting agent instructions
-│
-├── .github/workflows/
-│   └── lint.template.yml            # Ready-to-copy workflow template for consumers
-│
-├── .documentation/
-│   ├── installation-guide.md        # Full installation instructions
-│   ├── when-to-use-guide.md         # Decision guide for adoption
-│   ├── how-to-use-guide.md          # Detailed usage reference
-│   └── troubleshooting-guide.md     # Common issues and fixes
-│
-└── tests/
-    ├── directory-discovery.test.js  # 8 tests: dir detection, filtering, git changes
-    ├── manifest-manager.test.js     # 9 tests: hash, age, CRUD operations
-    ├── drift-detector.test.js       # 10 tests: 4 drift types, reports, auto-heal
-    └── config-manager.test.js       # 8 tests: project detection, templates, config
-```
-
-### Architecture Overview
-
-The plugin has three main layers:
-
-**1. Shell Scripts (`scripts/`)** — The core linting engine. These bash scripts handle the actual ESLint and Ruff invocations, baseline file creation, and dashboard rendering. They're designed to work standalone (called by git hooks or the GitHub Action) without needing Node.js at runtime.
-
-**2. Node.js Library (`lib/`)** — JavaScript modules that handle project detection, manifest management, drift detection, venv management, and git hook installation. The CLI (`bin/gimme-the-lint.js`) orchestrates these modules via commander.
-
-**3. Integration Layer** — The GitHub Action (`action.yml`), Claude Code plugin (`.claude-plugin/`), and git hooks (`githooks/`) connect the core engine to different environments. Each integration knows how to invoke `run-checks.sh` and interpret its output for its specific context.
-
-### How Progressive Linting Works
-
-1. **Baseline Phase**: `eslint-baseline.sh` and `ruff-baseline.sh` scan every production directory, run the linter, and save the violation list to per-directory JSON files in `.lttf/` (frontend) and `.lttf-ruff/` (backend). A manifest (`.lttf-manifest.json`) records the directory list, violation counts, and an MD5 hash of the linter config.
-
-2. **Check Phase**: `run-checks.sh` uses `git diff --cached` to find staged files, maps them to directories, and runs the linter only on those directories. It compares the results against the baseline — if the only violations found are ones already in the baseline, the check passes.
-
-3. **Drift Phase**: On every check, `drift-detector.js` compares the current state against the manifest. It flags four types of drift:
-   - **Directory drift**: A directory was added or removed since the last baseline
-   - **Config drift**: The linter config file's MD5 hash doesn't match the manifest
-   - **Time drift**: The baseline is older than 30 days
-   - **Violation drift**: The violation count changed (could mean progress or regression)
-
-4. **Heal Phase**: When you re-run `baseline`, the manifest auto-updates with the new directory list, config hash, and timestamp. Changes are logged so you can track what drifted.
-
-### Directory Discovery
-
-The auto-discovery system in `directory-discovery.js` uses `find` to locate all directories under your source roots, then filters out anything matching test patterns:
-
-**Excluded patterns**: `__tests__`, `__test__`, `test`, `tests`, `testing`, `e2e`, `cypress`, `playwright`, `__mocks__`, `__fixtures__`, `__snapshots__`, `__pycache__`, `.hidden`, `node_modules`, `dist`, `build`, `.next`, `.nuxt`
-
-This means you never need to manually configure which directories to lint. When someone adds `frontend/src/payments/`, it's automatically included on the next run.
-
-### GitHub Action
-
-The composite action (`action.yml`) sets up Node.js and Python, installs dependencies with caching, and runs the lint checks. It supports two modes:
-
-- **Progressive** (default): Only checks files changed in the PR
-- **Full**: Checks the entire codebase
-
-When `comment-on-pr: true` is set, it posts a formatted summary as a PR comment using `actions/github-script`, including violation counts, drift warnings, and status badges.
-
-### Edge Cases Handled
-
-- **No git repository**: `getChangedFiles()` returns empty arrays gracefully; hooks skip without error
-- **No baselines yet**: Linting still runs but treats everything as new (blocks until baselines are created)
-- **Empty project**: `detectProjectType()` returns `unknown`; init warns and skips auto-config
-- **Missing Python**: Venv setup is skipped with a warning; frontend linting still works
-- **Corrupt manifest**: Re-running `baseline` creates a fresh manifest from scratch
-- **Conflicting hooks**: Existing git hooks are backed up to `.git/hooks/pre-commit.backup.<timestamp>` before overwriting; uninstall restores them
-
-### Supported Project Structures
-
-| Structure | Frontend Path | Backend Path | Detection |
-|-----------|--------------|-------------|-----------|
-| Monorepo | `frontend/src/` | `backend/app/` | Both `frontend/` and `backend/` dirs exist |
-| Frontend-only | `src/` | — | `src/` + `package.json`, no `backend/` |
-| Backend-only | — | `app/` | `app/` + `pyproject.toml`, no `frontend/` |
-
-### Custom Directory Configuration
-
-If your project doesn't follow the default directory layout, create a `gimme-the-lint.config.js` at your project root:
+Zero config is the default — apps and their linters are auto-detected. To
+override, add `gimme-the-lint.config.js` at the repo root:
 
 ```js
 module.exports = {
-  frontendDir: 'client',       // default: 'frontend'
-  backendDir: 'server',        // default: 'backend'
-  srcDir: 'lib',               // default: 'src'
-  appDir: 'core',              // default: 'app'
+  // Explicit per-app linter binding (omit `apps` entirely to auto-detect).
+  apps: {
+    'apps/orders-api':    { linters: ['eslint'] },
+    'apps/orders-worker': { linters: ['ruff'] },
+    'apps/billing-events':{ linters: ['golangci-lint'] },
+    'apps/audit-stream':  { linters: ['clippy'] },
+  },
+  // Directories to skip (template/scaffold dirs are skipped by convention).
+  skipPatterns: ['_template-*', '__template__'],
 };
 ```
 
-All shell scripts (`run-checks.sh`, `eslint-baseline.sh`, `ruff-baseline.sh`, `dashboard.sh`) and the GitHub Action inline fallback read this config via a `node -e` snippet. Config values take priority over auto-detection, but if no config file exists the original auto-detection logic is used — so this is fully backward-compatible.
+### Polyglot monorepos
 
-Running `gimme-the-lint install` generates this file automatically based on your project structure. You can edit it afterward to match any non-standard layout.
+A modern monorepo is not one frontend and one backend:
 
-### Requirements
+```
+apps/
+├── orders-api/        package.json   → eslint
+├── orders-worker/     pyproject.toml → ruff
+├── billing-events/    go.mod         → golangci-lint
+└── audit-stream/      Cargo.toml     → clippy
+```
 
-- **Node.js** >= 18.0.0
-- **Python** >= 3.11 (for backend linting; optional)
-- **Git** (for hooks and changed-file detection)
-- **ESLint** >= 9.0.0 (frontend; optional peer dependency)
-- **jq** (for manifest operations in shell scripts)
+`gimme-the-lint baseline` discovers all four, binds each to its linter, and
+writes `.gtl/apps/<app>/baseline.json` per app. Workspace files
+(`pnpm-workspace.yaml`, `nx.json`, `lerna.json`) need no special handling —
+each package carries its own manifest, so discovery just works.
+
+### I use Biome — can I use this?
+
+Yes. Drop a `biome.json` in an app and gimme-the-lint binds that app to Biome
+instead of ESLint — no running both, no doubled CI time, no config conflict.
+Biome's JSON reporter is parsed like any other adapter. (Biome locates
+diagnostics by byte span, not line number; that is fine — fingerprints exclude
+position by design.) The linter is config, not a hardcode: ESLint, Biome,
+Ruff, golangci-lint and Clippy are all just adapters.
+
+### Idempotent skips
+
+A language is never a hard prerequisite:
+
+- **No code** for a language → silent no-op.
+- **Code present, linter not installed** → loud `⚠ SKIPPED` warning; the commit
+  still goes through, and the gap is recorded in the manifest.
+- Under `--strict` (and in `--offline` installs) that same case **fails loudly**
+  — a silent skip there would hide a provisioning bug.
 
 ---
 
-## Roadmap
+## Adoption modes
 
-### v1.1 — Enhanced Linter Support
-- Support for additional Python linters (pylint, flake8)
-- Support for legacy JS linters (TSLint)
-- Custom rule presets
-- Parallel directory processing (lint multiple dirs concurrently)
-- Team dashboard (weekly health scorecard)
-
-### v1.2 — Observability & Integrations
-- Web dashboard (localhost:3000/lint-dashboard)
-- VS Code extension integration
-- Slack/Discord notifications for CI failures
-- Drift history tracking (timeline of baseline changes)
-- Automated baseline refresh (scheduled via cron)
-
-### v2.0 — Multi-Language & Enterprise
-- Multi-language support (Go, Rust, Java)
-- Cloud-based baseline storage
-- Team collaboration features
-- AI-powered violation triage (auto-prioritize fixes)
-- Cross-repo baseline sharing (enterprise feature)
-
----
-
-## Marketplace
-
-Published to the [Glitch Kingdom Marketplace](https://github.com/TheGlitchKing/glitch-kingdom-of-plugins):
+**Air-gapped / regulated environments** — `install --offline` performs no
+network fetches, assumes the linter toolchain is provisioned by your image, and
+fails loudly if a present language has no linter:
 
 ```bash
-# Via Claude marketplace
-/plugin install TheGlitchKing/gimme-the-lint
-
-# Via npm
-npm install --save-dev @theglitchking/gimme-the-lint
+gimme-the-lint install --offline
 ```
+
+**Greenfield / new repos** — there is no legacy debt to grandfather, so
+`init --no-baseline` writes empty baselines and installs hooks: every violation
+counts as new, "strict from day one":
+
+```bash
+gimme-the-lint init --no-baseline
+```
+
+---
+
+## Migrating from v1
+
+v2 changes the baseline layout (`.lttf/` + `.lttf-ruff/` → `.gtl/`), the
+baseline format, and the config schema. One command handles it:
+
+```bash
+gimme-the-lint migrate
+```
+
+It backs the legacy directories up under `.gtl/legacy-backup/<timestamp>/`,
+then re-baselines from the current code into the v2 layout. `check` also
+detects an un-migrated v1 project and prints the same hint. See
+[CHANGELOG.md](CHANGELOG.md) for the full list of breaking changes.
+
+---
+
+## Claude Code
+
+| Command | Description |
+|---------|-------------|
+| `/lint` | Run progressive linting on the project |
+| `/lint:status` | Show the dashboard (per-app baselines + drift) |
+| `/lint:baseline` | Create or refresh baselines |
+
+When a commit Claude makes is blocked by the pre-commit hook, the hook output
+includes LLM instructions: Claude auto-runs `check --fix`, re-stages, and
+retries — only asking you if violations remain after auto-fix.
+
+## GitHub Action
+
+```yaml
+- uses: TheGlitchKing/gimme-the-lint@v2
+  with:
+    mode: full          # 'full' or 'progressive'
+    fix: false
+    strict: false
+    comment-on-pr: true
+```
+
+A ready-to-copy workflow lives at
+[`.github/workflows/lint.template.yml`](.github/workflows/lint.template.yml).
+
+---
+
+## Architecture
+
+```
+lib/
+├── violation.js        NormalizedViolation — the linter-agnostic currency
+├── fingerprint.js      line/column-independent violation identity
+├── diff-engine.js      pure diff: new vs baselined vs fixed
+├── baseline-store.js   one baseline.json format for every linter
+├── adapters/           one adapter per linter (eslint, biome, ruff,
+│                       golangci-lint, clippy) + the base contract
+├── project-model.js    discovers apps + binds them to linters
+├── units.js            resolves apps → {dir, linters, baseline path}
+├── check.js            runCheck: lint → diff → report
+├── baseline.js         runBaseline: capture violations into .gtl/
+├── gtl-manifest.js     global .gtl/manifest.json
+├── drift.js            per-app drift detection
+├── toolchain.js        per-language linter availability
+├── migrate.js          v1 → v2 migration
+└── dashboard.js, report.js, installer.js, …
+```
+
+The engine is pure and fully unit-tested; adapters wrap real linters; the CLI,
+git hooks, GitHub Action and Claude Code plugin are thin front doors over it.
+
+## Requirements
+
+- **Node.js** >= 20
+- **Git** (for hooks and staged-file detection)
+- A linter for each language you use (`eslint`/`biome`, `ruff`, `golangci-lint`,
+  `clippy`) — any language whose linter is absent is simply skipped
 
 ## License
 

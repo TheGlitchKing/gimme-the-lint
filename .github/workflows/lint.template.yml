@@ -1,6 +1,6 @@
 # gimme-the-lint: Progressive Linting Workflow Template
 # Copy this file to your repo's .github/workflows/lint.yml
-# Customize inputs as needed for your project
+# Customize inputs as needed for your project.
 
 name: Progressive Lint
 
@@ -22,14 +22,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for changed file detection
+          fetch-depth: 0  # Full history for changed-file detection
 
-      - uses: TheGlitchKing/gimme-the-lint@v1
+      - uses: TheGlitchKing/gimme-the-lint@v2
         with:
-          mode: progressive      # Only lint changed files (use 'full' for entire codebase)
-          fix: false              # Set to 'true' to auto-fix in CI
-          frontend: true          # Enable ESLint checks
-          backend: true           # Enable Ruff checks
-          python-version: '3.13'  # Python version for backend
+          mode: full              # 'full' = whole codebase; 'progressive' = staged changes
+          fix: false              # Set 'true' to auto-fix in CI
+          strict: false           # Set 'true' to fail when a linter is missing
+          python-version: '3.13'  # For Ruff; blank to skip Python setup
           node-version: '22'      # Node.js version
-          comment-on-pr: true     # Post results as PR comment
+          comment-on-pr: true     # Post results as a PR comment
+
+      # Linters are auto-detected per app (JS/TS, Python, Go, Rust). Install
+      # the ones your repo uses in steps before this action, or rely on the
+      # toolchains the runner already provides.

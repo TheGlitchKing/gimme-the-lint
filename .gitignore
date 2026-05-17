@@ -3,7 +3,6 @@ node_modules/
 *.log
 .DS_Store
 /tmp/
-.lttf/
-.lttf-ruff/
 *.tgz
 .claude/.gimme-the-lint-update-cache.json
+.planning/

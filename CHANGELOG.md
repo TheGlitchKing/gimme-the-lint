@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-05-17
+
+A ground-up rearchitecture: gimme-the-lint is now a language-agnostic
+progressive-lint engine that owns its own baseline diffing, driven by
+per-directory linter adapters.
+
+### Breaking Changes
+- **Baseline layout moved** from `frontend/.lttf/` + `backend/.lttf-ruff/` to a
+  single per-app tree, `.gtl/apps/<app>/baseline.json`, plus a global
+  `.gtl/manifest.json`. Run `gimme-the-lint migrate` to convert (it backs up
+  the legacy directories and re-baselines).
+- **Baseline file format changed** to a linter-agnostic fingerprint map.
+- **Config schema changed**: the `frontend`/`backend` model is replaced by an
+  optional `apps` map binding directories to linters; `skipPatterns` added.
+  `lttfDir`/`ruffBaselineDir` keys removed.
+- **`check` flags removed**: `--frontend-only`, `--backend-only`, `--verbose`.
+- **GitHub Action inputs changed**: `frontend`/`backend` removed (linting is
+  now polyglot auto-detect); `strict` added. Pin `@v2`.
+- The `lint-to-the-future` dependency is gone — gimme-the-lint no longer shells
+  out to it; ESLint progressivity is handled by the in-house engine.
+
+### Added
+- In-house progressive-diff engine: line/column-independent violation
+  fingerprints, so baselined violations survive code shifting in a file.
+- Linter adapter interface — each linter is a self-contained adapter.
+- **Go** support via `golangci-lint` and **Rust** support via `cargo clippy`,
+  alongside ESLint and **Biome** (JS/TS) and Ruff (Python).
+- **Biome** adapter: a `biome.json` binds an app to Biome and supersedes the
+  default ESLint binding for that app.
+- Polyglot project model: apps auto-discovered by walking for package
+  manifests; monorepo workspaces handled; `_template-*` dirs skipped.
+- Per-app drift detection (app add/remove, config, linter version, age) —
+  a change in one app never churns unrelated baselines.
+- Idempotent skips: an app with code but no installed linter is warn-skipped
+  (never blocks), or fails loudly under `--strict`.
+- `--offline` install for air-gapped environments (no npm/pip fetches; fails
+  loudly on a missing toolchain).
+- `--no-baseline` greenfield install / `baseline --empty` — "strict from day
+  one" with nothing grandfathered.
+- `gimme-the-lint migrate` — one-shot v1 → v2 migration.
+
+### Changed
+- `run-checks.sh`, `eslint-baseline.sh`, `ruff-baseline.sh`, `dashboard.sh` are
+  now thin shims over the Node engine.
+- The dashboard renders from `.gtl/manifest.json` with per-app drift.
+
 ## [1.1.2] - 2026-04-11
 
 ### Fixed

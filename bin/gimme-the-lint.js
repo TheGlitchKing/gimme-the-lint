@@ -32,6 +32,8 @@ program
   .option('--frontend', 'Frontend only')
   .option('--backend', 'Backend only')
   .option('--force', 'Overwrite existing configs')
+  .option('--offline', 'Air-gapped install: no npm/pip fetches; toolchain assumed present')
+  .option('--no-baseline', 'Greenfield: write empty baselines (strict from day one)')
   .action(async (opts) => {
     const installer = require('../lib/installer');
     const chalk = require('chalk');
@@ -43,6 +45,9 @@ program
         frontend: opts.frontend !== undefined ? true : undefined,
         backend: opts.backend !== undefined ? true : undefined,
         force: opts.force,
+        offline: opts.offline,
+        // commander sets opts.baseline=false when --no-baseline is passed.
+        noBaseline: opts.baseline === false,
       });
 
       for (const step of result.steps) {
@@ -52,9 +57,20 @@ program
         console.log(chalk.yellow('  ⚠ ') + err);
       }
 
+      // Offline preflight gaps are a hard failure: provisioning is broken.
+      if (result.offlineGaps && result.offlineGaps.length > 0) {
+        console.error(
+          chalk.red(
+            `\n✗ Offline install: ${result.offlineGaps.length} linter(s) missing for present code.`
+          )
+        );
+        console.error(chalk.red('  Provision the toolchain (CodeArtifact / AMI) and retry.\n'));
+        process.exit(1);
+      }
+
       console.log(chalk.green('\n✓ Installation complete!\n'));
       console.log('Next steps:');
-      console.log('  gimme-the-lint baseline     Create LTTF baselines');
+      console.log('  gimme-the-lint baseline     Capture progressive-lint baselines');
       console.log('  gimme-the-lint hooks        Install git hooks');
       console.log('  gimme-the-lint dashboard    View linting status');
       console.log('');
@@ -96,48 +112,99 @@ program
   .option('--frontend', 'Frontend only')
   .option('--backend', 'Backend only')
   .option('--force', 'Overwrite existing configs')
+  .option('--offline', 'Air-gapped install: no npm/pip fetches; toolchain assumed present')
+  .option('--no-baseline', 'Greenfield: write empty baselines (strict from day one)')
   .action(async (opts) => {
-    // Delegate to install
-    await program.commands.find((c) => c.name() === 'install').parseAsync(['node', 'cmd', ...(opts.frontend ? ['--frontend'] : []), ...(opts.backend ? ['--backend'] : []), ...(opts.force ? ['--force'] : [])]);
+    // Delegate to install, forwarding every flag.
+    const args = ['node', 'cmd'];
+    if (opts.frontend) args.push('--frontend');
+    if (opts.backend) args.push('--backend');
+    if (opts.force) args.push('--force');
+    if (opts.offline) args.push('--offline');
+    if (opts.baseline === false) args.push('--no-baseline');
+    await program.commands.find((c) => c.name() === 'install').parseAsync(args);
   });
 
 program
   .command('check')
-  .description('Run progressive linting checks')
-  .option('--fix', 'Auto-fix violations')
-  .option('--verbose', 'Show detailed output')
-  .option('--frontend-only', 'Frontend only')
-  .option('--backend-only', 'Backend only')
-  .option('--all', 'Lint entire codebase')
-  .action((opts) => {
-    const args = [];
-    if (opts.fix) args.push('--fix');
-    if (opts.verbose) args.push('--verbose');
-    if (opts.frontendOnly) args.push('--frontend-only');
-    if (opts.backendOnly) args.push('--backend-only');
-    if (opts.all) args.push('--all');
-    runScript('run-checks.sh', args.join(' '));
+  .description('Run progressive linting checks (only NEW violations block)')
+  .option('--fix', 'Auto-fix violations where the linter supports it')
+  .option('--all', 'Lint the entire codebase, not just staged changes')
+  .option('--strict', 'Fail when a linter is missing for code that is present')
+  .action(async (opts) => {
+    const chalk = require('chalk');
+    const { runCheck } = require('../lib/check');
+    const { formatCheckReport } = require('../lib/report');
+    try {
+      const report = await runCheck(process.cwd(), {
+        fix: opts.fix,
+        changedOnly: !opts.all,
+        strict: opts.strict,
+      });
+      console.log(formatCheckReport(report));
+      process.exit(report.ok ? 0 : 1);
+    } catch (err) {
+      console.error(chalk.red(`\n✗ ${err.message}\n`));
+      process.exit(1);
+    }
   });
 
 program
   .command('baseline [target]')
-  .description('Create LTTF baselines (frontend, backend, or both)')
-  .action((target) => {
-    if (target === 'frontend') {
-      runScript('eslint-baseline.sh');
-    } else if (target === 'backend') {
-      runScript('ruff-baseline.sh');
-    } else {
-      runScript('eslint-baseline.sh');
-      runScript('ruff-baseline.sh');
+  .description('Create or refresh progressive-lint baselines')
+  .option('--strict', 'Fail when a linter is missing for code that is present')
+  .option('--empty', 'Write empty baselines (greenfield: treat every violation as new)')
+  .action(async (target, opts) => {
+    const chalk = require('chalk');
+    const { runBaseline } = require('../lib/baseline');
+    const { formatBaselineReport } = require('../lib/report');
+    // [target] is accepted for backward compatibility; v2 baselines every unit.
+    try {
+      const report = await runBaseline(process.cwd(), {
+        strict: opts.strict,
+        noBaseline: opts.empty,
+      });
+      console.log(formatBaselineReport(report, process.cwd()));
+      console.log('');
+    } catch (err) {
+      console.error(chalk.red(`\n✗ ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('migrate')
+  .description('Migrate a v1 (.lttf) project to the v2 .gtl/ layout')
+  .option('--strict', 'Fail when a linter is missing for code that is present')
+  .action(async (opts) => {
+    const chalk = require('chalk');
+    const { migrate } = require('../lib/migrate');
+    try {
+      const result = await migrate(process.cwd(), { strict: opts.strict });
+      if (!result.migrated) {
+        console.log(chalk.yellow(`\n${result.reason}\n`));
+        return;
+      }
+      console.log(chalk.green('\n✓ Migrated to the v2 .gtl/ layout\n'));
+      console.log(`  Legacy baselines backed up: ${result.backedUp.join(', ')}`);
+      console.log(chalk.dim(`    → ${result.backupPath}`));
+      console.log(`  Re-baselined ${result.baseline.unitCount} app(s) into .gtl/`);
+      console.log('');
+      console.log('Next: review the new .gtl/ directory and commit it.');
+      console.log('');
+    } catch (err) {
+      console.error(chalk.red(`\n✗ Migration failed: ${err.message}\n`));
+      process.exit(1);
     }
   });
 
 program
   .command('dashboard')
-  .description('Show progressive linting status dashboard')
-  .action(() => {
-    runScript('dashboard.sh');
+  .description('Show the progressive linting dashboard (baselines + drift)')
+  .action(async () => {
+    const { formatDashboard } = require('../lib/dashboard');
+    console.log(await formatDashboard(process.cwd()));
+    console.log('');
   });
 
 program
