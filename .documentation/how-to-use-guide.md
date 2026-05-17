@@ -65,6 +65,16 @@ treated as a workspace root and only the leaf modules are linted — bind `.`
 explicitly in `gimme-the-lint.config.js` to lint a root module. See the
 installation guide's "Terraform / OpenTofu app discovery" section for detail.
 
+## Shipped lint configs
+
+`install` seeds each app with a best-practice config for its linter
+(`eslint.config.js`, `biome.json`, `pyproject.toml`, `.golangci.yml`,
+`clippy.toml` + `Cargo.toml` `[lints.clippy]`, `.tflint.hcl`) plus a repo-root
+`.gitleaks.toml`. Configs are **created only if absent** — your own config is
+never overwritten. Every shipped config includes a security rule layer; secret
+detection is universal via gitleaks and always blocks. See the **Lint Rules
+Guide** for the baseline rules per codebase and how to adjust them.
+
 ## Configuration
 
 Auto-detection needs no config. To override, add `gimme-the-lint.config.js`:

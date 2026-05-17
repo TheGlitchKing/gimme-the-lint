@@ -12,8 +12,11 @@ today and clean up the backlog at its own pace.
 
 - **An existing codebase has no linting** and a clean-everything-first sweep is
   not realistic.
-- **You have a polyglot monorepo** — JS/TS, Python, Go, Rust apps side by side.
-  Each app is auto-bound to its linter; one tool covers them all.
+- **You have a polyglot monorepo** — JS/TS, Python, Go, Rust, Terraform apps
+  side by side. Each app is auto-bound to its linter; one tool covers them all.
+- **You want best-practice rules without hand-writing configs.** `install`
+  seeds each app with a curated, security-aware config for its linter — see the
+  Lint Rules Guide.
 - **You use Biome, not ESLint** — drop a `biome.json` and the app uses Biome.
   No running both linters.
 - **CI keeps going red on old debt.** gimme-the-lint fails CI only on new

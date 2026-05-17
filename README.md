@@ -54,6 +54,10 @@ of another.
 - **Per-app model** — auto-discovers every package in a monorepo; no `frontend/`
   + `backend/` assumption
 - **Per-app drift detection** — app add/remove, config change, linter version, age
+- **Best-practice configs shipped** — `install` seeds each app with a curated,
+  security-aware config for its linter (create-if-absent — never clobbers yours)
+- **Security linting built in** — gitleaks for secrets across every codebase,
+  plus per-language security rules (gosec, Ruff `S`, eslint-plugin-security)
 - **Idempotent skips** — an app with code but no installed linter is warn-skipped
   (never blocks) — or fails loudly under `--strict`
 - **Offline install** — air-gapped mode for regulated environments
@@ -71,6 +75,21 @@ of another.
 | Go | `golangci-lint` | `go.mod` |
 | Rust | `clippy` (`cargo clippy`) | `Cargo.toml` |
 | Terraform / OpenTofu | `tflint` | `*.tf` / `*.tofu` files (no manifest) |
+
+## Shipped lint configs
+
+`install` seeds every discovered app with a best-practice ("recommended" tier)
+config for its linter — `eslint.config.js` + `.prettierrc.json`, `biome.json`,
+`pyproject.toml` `[tool.ruff]`, `.golangci.yml`, `clippy.toml` + `Cargo.toml`
+`[lints.clippy]`, `.tflint.hcl` — plus a repo-root `.gitleaks.toml`. Configs are
+**created only if absent**; your own config is never overwritten.
+
+Every shipped config carries a **security layer**: gitleaks scans all files for
+secrets (passwords, SSL/private keys, tokens) and always blocks, while each
+linter adds language-specific security rules (`gosec`, Ruff `S` / flake8-bandit,
+`eslint-plugin-security`, Biome's `security` group). See
+[`.documentation/lint-rules-guide.md`](.documentation/lint-rules-guide.md) for
+the baseline rules per codebase and how to adjust them.
 
 ---
 

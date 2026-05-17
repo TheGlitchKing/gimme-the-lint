@@ -58,6 +58,27 @@ gimme-the-lint dashboard     # review baseline status and drift
 
 Commit the generated `.gtl/` directory — it is the team-shared baseline.
 
+## Best-practice linter configs
+
+`install` seeds each discovered app with a best-practice ("recommended" tier)
+config for its linter — **create-if-absent**, so an existing config is never
+overwritten (`--force` replaces):
+
+| Codebase | Seeded into the app dir |
+|----------|-------------------------|
+| JS / TS (ESLint) | `eslint.config.js` + `.prettierrc.json` |
+| JS / TS (Biome) | `biome.json` |
+| Python (Ruff) | `pyproject.toml` `[tool.ruff]` |
+| Go | `.golangci.yml` |
+| Rust | `clippy.toml` + `Cargo.toml` `[lints.clippy]` |
+| Terraform | `.tflint.hcl` |
+| Secrets (all) | `.gitleaks.toml` at the repo root |
+
+The ESLint config needs extra dev dependencies in the target project
+(`eslint-plugin-security`, `eslint-plugin-no-secrets`, `eslint-config-prettier`,
+`prettier`, …). See the **Lint Rules Guide** for the full list, the baseline
+rules each codebase ships, and how/where to adjust them.
+
 ## Terraform / OpenTofu app discovery
 
 Terraform has no manifest file (a directory of `*.tf` / `*.tofu` files *is* the

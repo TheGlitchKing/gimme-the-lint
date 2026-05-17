@@ -24,6 +24,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at the repo root *and* in `modules/*/`), the root is treated as a workspace
   root — bind `.` explicitly in `gimme-the-lint.config.js` to lint it. See the
   installation guide.
+- **Best-practice config templates** for every supported codebase. `install`
+  now seeds each discovered app with a curated, "recommended tier" config for
+  its linter — `eslint.config.js` + `.prettierrc.json`, `biome.json`,
+  `pyproject.toml` `[tool.ruff]`, `.golangci.yml` (golangci-lint v2 format),
+  `clippy.toml` + `Cargo.toml` `[lints.clippy]`, `.tflint.hcl`. Every write is
+  create-if-absent — an existing config is never overwritten (`--force`
+  replaces). New module `lib/linter-configs.js`.
+- **Security lint rules** across every codebase. gitleaks remains the universal
+  secret scanner (passwords, SSL/private keys, tokens — always blocks, never
+  baselined) and its template now also flags PEM private keys and hardcoded
+  password assignments. Per-linter security layers are enabled in the shipped
+  configs: `gosec` (Go), Ruff `S` / flake8-bandit (Python),
+  `eslint-plugin-security` + `eslint-plugin-no-secrets` (JS/TS), and Biome's
+  `security` rule group.
+- **Prettier support** — a `.prettierrc.json` template is seeded for ESLint
+  apps, and the ESLint config now applies `eslint-config-prettier` so the two
+  do not fight over formatting. The ESLint template refresh is additive: every
+  pre-existing rule (architecture import guards, `no-cycle`, unused-vars) is
+  retained.
+- **New documentation** — `.documentation/lint-rules-guide.md` documents every
+  supported codebase, its baseline rules, the security layers, and how/where to
+  adjust them.
 
 ## [2.0.0] - 2026-05-17
 
