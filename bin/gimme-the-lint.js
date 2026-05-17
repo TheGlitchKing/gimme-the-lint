@@ -146,9 +146,11 @@ program
 
 program
   .command('dashboard')
-  .description('Show progressive linting status dashboard')
-  .action(() => {
-    runScript('dashboard.sh');
+  .description('Show the progressive linting dashboard (baselines + drift)')
+  .action(async () => {
+    const { formatDashboard } = require('../lib/dashboard');
+    console.log(await formatDashboard(process.cwd()));
+    console.log('');
   });
 
 program
