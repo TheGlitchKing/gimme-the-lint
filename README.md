@@ -19,7 +19,7 @@ stuff at its own pace; meanwhile no new mess gets in.
 **v2.0** generalizes that idea to any linter and any language. It is no longer
 "ESLint + Ruff for webapps" — it is a progressive-lint **engine** with a
 pluggable **linter adapter** for each tool, across **JavaScript/TypeScript, Python,
-Go, Rust, and Terraform**, in **any monorepo shape**.
+Go, Rust, Terraform, and Ansible**, in **any monorepo shape**.
 
 ---
 
@@ -38,10 +38,10 @@ is ever flagged. (In v1 this job was outsourced to the third-party
 
 Each app is bound to the linters its package manifest implies — `package.json`
 → ESLint, `pyproject.toml` → Ruff, `go.mod` → golangci-lint, `Cargo.toml` →
-Clippy, `biome.json` → Biome. Terraform has no manifest, so a directory of
-`*.tf` / `*.tofu` files binds to tflint by extension. Drift detection runs per
-app, so a config or linter-version change in one app never churns the baselines
-of another.
+Clippy, `biome.json` → Biome, `ansible.cfg` / `galaxy.yml` → ansible-lint.
+Terraform has no manifest, so a directory of `*.tf` / `*.tofu` files binds to
+tflint by extension. Drift detection runs per app, so a config or linter-version
+change in one app never churns the baselines of another.
 
 ---
 
@@ -50,7 +50,7 @@ of another.
 - **Progressive linting** — only new violations block; existing ones are baselined
 - **In-house diff engine** — line/column-independent fingerprints survive code shifts
 - **Pluggable linter adapters** — the choice of linter is config, not a hardcode
-- **Polyglot** — JavaScript/TypeScript, Python, Go, Rust, Terraform out of the box
+- **Polyglot** — JavaScript/TypeScript, Python, Go, Rust, Terraform, Ansible out of the box
 - **Per-app model** — auto-discovers every package in a monorepo; no `frontend/`
   + `backend/` assumption
 - **Per-app drift detection** — app add/remove, config change, linter version, age
@@ -75,21 +75,37 @@ of another.
 | Go | `golangci-lint` | `go.mod` |
 | Rust | `clippy` (`cargo clippy`) | `Cargo.toml` |
 | Terraform / OpenTofu | `tflint` | `*.tf` / `*.tofu` files (no manifest) |
+| Ansible | `ansible-lint` | `ansible.cfg`, `galaxy.yml` |
 
 ## Shipped lint configs
 
 `install` seeds every discovered app with a best-practice ("recommended" tier)
-config for its linter — `eslint.config.js` + `.prettierrc.json`, `biome.json`,
-`pyproject.toml` `[tool.ruff]`, `.golangci.yml`, `clippy.toml` + `Cargo.toml`
-`[lints.clippy]`, `.tflint.hcl` — plus a repo-root `.gitleaks.toml`. Configs are
-**created only if absent**; your own config is never overwritten.
+config for its linter — **created only if absent**, so your own config is never
+overwritten. Each ships a sensible default rule set and a single **lever** to
+dial strictness up or down:
 
-Every shipped config carries a **security layer**: gitleaks scans all files for
-secrets (passwords, SSL/private keys, tokens) and always blocks, while each
-linter adds language-specific security rules (`gosec`, Ruff `S` / flake8-bandit,
-`eslint-plugin-security`, Biome's `security` group). See
-[`.documentation/lint-rules-guide.md`](.documentation/lint-rules-guide.md) for
-the baseline rules per codebase and how to adjust them.
+| Codebase | Linter | Default rules (recommended tier) | Strictness lever |
+|----------|--------|----------------------------------|------------------|
+| JS/TS | ESLint | `@eslint/js` + React recommended, import-architecture guards, security plugins, Prettier-compatible | rules block in `eslint.config.js` |
+| JS/TS | Biome | recommended set + full `security` group + console/complexity rules | rule levels in `biome.json` |
+| Python | Ruff | pyflakes / pycodestyle / isort / bugbear / pyupgrade + `S` security + comprehensions / simplify | `select` / `ignore` in `pyproject.toml` |
+| Go | golangci-lint | `standard` set + correctness & quality linters + `gosec` | `linters.enable` in `.golangci.yml` |
+| Rust | Clippy | `pedantic` + `cargo` at `warn`, noisy lints allowed back | `[lints.clippy]` levels in `Cargo.toml` |
+| Terraform | tflint | bundled `terraform` ruleset, `recommended` preset | `preset` in `.tflint.hcl` (`recommended` → `all`) |
+| Ansible | ansible-lint | `moderate` profile | `profile` in `.ansible-lint` (`min` → `production`) |
+| Secrets (all) | gitleaks | default ruleset + key / password rules — **always blocks** | `[allowlist]` in `.gitleaks.toml` |
+
+Every shipped config carries a **security layer**. gitleaks scans every file in
+every codebase for secrets (passwords, SSL/private keys, tokens) and always
+blocks — secrets are never baselined. Each linter adds language-specific
+security rules on top (`gosec`, Ruff `S` / flake8-bandit, `eslint-plugin-security`,
+Biome's `security` group), which follow normal progressive baselining.
+
+To go stricter, pull the lever in the table above — because violations are
+progressively baselined, raising strictness never blocks existing code, only new
+code is held to the higher bar. Full per-codebase detail — every default rule
+and how to adjust it — is in
+[`.documentation/lint-rules-guide.md`](.documentation/lint-rules-guide.md).
 
 ---
 
@@ -284,7 +300,8 @@ lib/
 ├── diff-engine.js      pure diff: new vs baselined vs fixed
 ├── baseline-store.js   one baseline.json format for every linter
 ├── adapters/           one adapter per linter (eslint, biome, ruff,
-│                       golangci-lint, clippy, tflint) + the base contract
+│                       golangci-lint, clippy, tflint, ansible-lint)
+│                       + the base contract
 ├── project-model.js    discovers apps + binds them to linters
 ├── units.js            resolves apps → {dir, linters, baseline path}
 ├── check.js            runCheck: lint → diff → report
@@ -304,7 +321,8 @@ git hooks, GitHub Action and Claude Code plugin are thin front doors over it.
 - **Node.js** >= 20
 - **Git** (for hooks and staged-file detection)
 - A linter for each language you use (`eslint`/`biome`, `ruff`, `golangci-lint`,
-  `clippy`, `tflint`) — any language whose linter is absent is simply skipped
+  `clippy`, `tflint`, `ansible-lint`) — any language whose linter is absent is
+  simply skipped
 
 ## License
 

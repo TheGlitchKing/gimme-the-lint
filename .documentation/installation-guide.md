@@ -12,6 +12,7 @@ gimme-the-lint v2.0 — polyglot progressive linting.
   - Go — `golangci-lint`
   - Rust — `clippy` (ships with the Rust toolchain)
   - Terraform / OpenTofu — `tflint`
+  - Ansible — `ansible-lint`
 
 Any language whose linter is not installed is simply skipped (see the
 troubleshooting guide) — gimme-the-lint never hard-requires a toolchain.
@@ -72,6 +73,7 @@ overwritten (`--force` replaces):
 | Go | `.golangci.yml` |
 | Rust | `clippy.toml` + `Cargo.toml` `[lints.clippy]` |
 | Terraform | `.tflint.hcl` |
+| Ansible | `.ansible-lint` |
 | Secrets (all) | `.gitleaks.toml` at the repo root |
 
 The ESLint config needs extra dev dependencies in the target project

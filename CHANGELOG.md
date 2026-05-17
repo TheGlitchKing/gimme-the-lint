@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-05-17
+
+### Added
+- **Ansible support** via a new `ansible-lint` adapter. ansible-lint plugs into
+  the progressive-lint engine like every other linter: it runs
+  `ansible-lint -f codeclimate`, parses the CodeClimate JSON report, and only
+  new violations block. Supports `--fix`.
+- **Manifest-based discovery** for Ansible: a directory containing `ansible.cfg`
+  or `galaxy.yml` is auto-discovered and bound to `ansible-lint`. Ansible
+  playbooks are plain YAML with no manifest, so detection keys off those
+  unambiguous markers rather than a file extension (a YAML scan would match
+  nearly every repo). An Ansible repo with neither marker needs an explicit
+  `apps` entry in `gimme-the-lint.config.js`.
+- **Ansible best-practice config** — `install` seeds `.ansible-lint` with the
+  `moderate` profile (the strictness lever; raise to `safety` / `production`).
+- README now documents every supported codebase with a default-rules summary
+  and the strictness lever for each; `.documentation/lint-rules-guide.md` adds
+  a full Ansible section.
+
 ## [2.1.0] - 2026-05-17
 
 ### Added

@@ -20,6 +20,7 @@ never blocks existing code — it is baselined; only *new* violations block.
 | Go | golangci-lint | `.golangci.yml` | `go.mod` |
 | Rust | Clippy | `clippy.toml` + `Cargo.toml` `[lints.clippy]` | `Cargo.toml` |
 | Terraform / OpenTofu | TFLint | `.tflint.hcl` | `*.tf` / `*.tofu` files |
+| Ansible | ansible-lint | `.ansible-lint` | `ansible.cfg` / `galaxy.yml` |
 
 The config is written **into the app directory**, not the repo root — each app
 in a monorepo gets its own. Edit that file to adjust rules for that app.
@@ -43,6 +44,7 @@ per-linter security rules add language-specific depth on top.
 | JS/TS | Biome `security` group | `eval`, XSS sinks | Progressive |
 | Python | Ruff `S` (flake8-bandit) | hardcoded passwords, SQL injection, SSL misuse | Progressive |
 | Go | `gosec` | `G101` credentials, injection, weak crypto, insecure TLS | Progressive |
+| Ansible | ansible-lint `safety` profile | `no-log-password`, `risky-shell-pipe`, `risky-file-permissions` | Progressive |
 
 A leaked credential is never grandfathered: gitleaks runs as a pre-commit gate
 and fails on **any** finding. The per-linter security rules follow normal
@@ -180,6 +182,32 @@ the block from `templates/clippy-cargo-lints.template.toml` in the package.
 - TFLint is not a security scanner; gitleaks covers secrets in `.tf` files.
   Deeper IaC security scanning (open security groups, unencrypted storage) is a
   job for `tfsec` / `trivy`, which gimme-the-lint does not yet wrap.
+
+---
+
+## Ansible — ansible-lint
+
+**Config:** `.ansible-lint`.
+
+**Baseline rules:**
+- `profile: moderate` — ansible-lint's `moderate` strictness profile. Profiles
+  are graduated: `min` → `basic` → `moderate` → `safety` → `shared` →
+  `production`. `moderate` covers naming, idempotency, deprecated syntax, and
+  common correctness rules; ansible-lint also runs `yamllint` internally for
+  YAML hygiene.
+- `exclude_paths` skips `.cache/`, `.git/`, `molecule/`.
+
+**How to adjust:** edit `.ansible-lint`.
+- **Strictness lever** — change `profile`. `safety` adds security rules
+  (`no-log-password`, `risky-shell-pipe`, …); `production` is the strictest.
+- `warn_list` downgrades rules to non-blocking warnings; `skip_list` disables
+  them entirely; `enable_list` opts into rules that are off by default.
+
+**Detection:** Ansible has no manifest and playbooks are plain YAML, so apps are
+discovered by the unambiguous markers `ansible.cfg` and `galaxy.yml`. An Ansible
+repo with neither (just `roles/` / `playbooks/`) is not auto-discovered — add an
+explicit `apps` entry to `gimme-the-lint.config.js`. ansible-lint itself
+auto-discovers playbooks and roles from the directory it runs in.
 
 ---
 

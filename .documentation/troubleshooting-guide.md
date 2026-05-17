@@ -14,6 +14,8 @@ linter:
 - Ruff: `pip install ruff` (into the project `.venv`)
 - Go: install `golangci-lint`
 - Rust: `clippy` ships with `rustup`
+- Terraform: install `tflint`
+- Ansible: `pip install ansible-lint`
 
 To make a missing linter a hard error instead, run `check --strict`.
 
