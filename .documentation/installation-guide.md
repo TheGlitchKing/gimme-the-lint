@@ -1,140 +1,79 @@
 # Installation Guide
 
-## Prerequisites
+gimme-the-lint v2.0 — polyglot progressive linting.
 
-- **Node.js** >= 18.0.0
-- **npm** >= 8.0.0
-- **Git** (for hooks and change detection)
-- **Python** >= 3.11 (optional, for backend linting with Ruff)
+## Requirements
 
-## Quick Install (npm)
+- **Node.js** >= 20
+- **Git** — for hooks and staged-file detection
+- A linter for each language you lint:
+  - JavaScript/TypeScript — `eslint` **or** `biome`
+  - Python — `ruff`
+  - Go — `golangci-lint`
+  - Rust — `clippy` (ships with the Rust toolchain)
 
-### Local (recommended for projects)
+Any language whose linter is not installed is simply skipped (see the
+troubleshooting guide) — gimme-the-lint never hard-requires a toolchain.
+
+## Install
+
+### npm — local (recommended)
+
+Best for teams: everyone who clones the repo gets it.
 
 ```bash
-npm install @theglitchking/gimme-the-lint --save-dev
+npm install --save-dev @theglitchking/gimme-the-lint
+npx gimme-the-lint install
 ```
 
-### Global
+### npm — global
 
 ```bash
 npm install -g @theglitchking/gimme-the-lint
+gimme-the-lint install
 ```
 
-## One-Line Install (curl)
+### Claude Code plugin
+
+```
+/plugin install TheGlitchKing/gimme-the-lint
+```
+
+## Install modes
+
+| Mode | Command | Use when |
+|------|---------|----------|
+| Standard | `gimme-the-lint install` | Normal projects with internet access |
+| Offline | `gimme-the-lint install --offline` | Air-gapped / regulated workstations — no npm/pip fetches; the toolchain is provisioned by your image. Fails loudly if a linter is missing for code that is present. |
+| Greenfield | `gimme-the-lint init --no-baseline` | Brand-new repos — writes empty baselines and installs hooks so every violation is new ("strict from day one") |
+
+## After installing
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TheGlitchKing/gimme-the-lint/main/install.sh | bash
+gimme-the-lint baseline      # capture existing violations as baselines
+gimme-the-lint hooks         # install pre-commit + pre-push hooks
+gimme-the-lint dashboard     # review baseline status and drift
 ```
 
-This installs the package globally and runs the post-install setup.
+Commit the generated `.gtl/` directory — it is the team-shared baseline.
 
-## Initialize in Your Project
+## Upgrading from v1
 
-After installing, run:
+v2 changes the baseline layout, baseline format, and config schema. Run:
 
 ```bash
-npx gimme-the-lint init
+gimme-the-lint migrate
 ```
 
-This will:
+It backs the legacy `.lttf/` + `.lttf-ruff/` directories up under
+`.gtl/legacy-backup/` and re-baselines into the v2 `.gtl/` layout. See
+`CHANGELOG.md` for the full breaking-change list.
 
-1. Detect your project type (monorepo, frontend-only, backend-only)
-2. Copy appropriate config templates (ESLint, Ruff, Gitleaks, etc.)
-3. Set up Python virtual environment (if backend detected)
-4. Install git hooks (pre-commit, pre-push)
-5. Create initial lint manifests
-
-### Init Options
+## Uninstall
 
 ```bash
-# Skip Python venv creation
-npx gimme-the-lint init --skip-venv
-
-# Skip git hooks installation
-npx gimme-the-lint init --skip-hooks
+gimme-the-lint uninstall
 ```
 
-## Project Type Detection
-
-The installer auto-detects your project type:
-
-| Type | Detection Criteria |
-|------|-------------------|
-| **Monorepo** | Has both `frontend/` and `backend/` directories |
-| **Frontend-only** | Has `src/` dir + `package.json`, no `backend/` |
-| **Backend-only** | Has `app/` dir + `pyproject.toml`, no `frontend/` |
-| **Unknown** | None of the above — manual config required |
-
-## Peer Dependencies
-
-These are optional but recommended:
-
-- **eslint** >= 9.0.0 — Required for frontend linting (ESLint v9 flat config)
-- **ruff** — Installed automatically in `.venv` for backend linting
-
-## Verifying Installation
-
-```bash
-# Check CLI is available
-npx gimme-the-lint --version
-
-# Check full status
-npx gimme-the-lint status
-
-# View the dashboard
-npx gimme-the-lint dashboard
-```
-
-## GitHub Action Setup
-
-Add to your workflow (`.github/workflows/lint.yml`):
-
-```yaml
-name: Lint
-on: [pull_request]
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: TheGlitchKing/gimme-the-lint@v1
-        with:
-          mode: check
-          comment-on-pr: true
-```
-
-See the [how-to-use guide](./how-to-use-guide.md) for full GitHub Action configuration.
-
-## Claude Code Plugin
-
-If using Claude Code, the plugin is automatically available after npm install:
-
-```bash
-# In Claude Code, use slash commands:
-/lint          # Run progressive linting
-/lint:status   # View dashboard
-/lint:baseline # Create new baselines
-```
-
-## Uninstalling
-
-```bash
-# Remove the package
-npm uninstall @theglitchking/gimme-the-lint
-
-# Or use the cleanup script (restores original git hooks)
-npx gimme-the-lint uninstall
-```
-
-The uninstall script will:
-- Remove installed git hooks
-- Restore any backed-up original hooks
-- Remove the CLI
-
-It will **NOT** remove (clean up manually if desired):
-- `.venv/` — Python virtual environment
-- `frontend/.lttf/` — ESLint baseline files
-- `backend/.lttf-ruff/` — Ruff baseline files
-- Config files (`eslint.config.js`, `pyproject.toml`, `.gitleaks.toml`, etc.)
+Removes git hooks and `gimme-the-lint.config.js`. Baselines (`.gtl/`), linter
+configs, and `.venv` are left in place — remove them manually if desired.
