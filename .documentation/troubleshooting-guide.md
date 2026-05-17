@@ -75,6 +75,33 @@ warnings clear.
 `.gtl/` is committed and team-shared. On a merge conflict in a baseline file,
 take either side and run `gimme-the-lint baseline` to regenerate cleanly.
 
+## ESLint config errors: "Cannot find package 'eslint-plugin-security'"
+
+The seeded `eslint.config.js` imports security and Prettier plugins. Install
+them in the target project:
+
+```bash
+npm install --save-dev eslint-plugin-security eslint-plugin-no-secrets \
+  eslint-config-prettier prettier
+```
+
+See the Lint Rules Guide for the full ESLint dev-dependency list.
+
+## `install` did not seed a `biome.json` / `pyproject.toml`
+
+Biome and Ruff are *detected by* their config file, so a discovered app already
+has one and `install` reports it as `exists` rather than overwriting it. To
+apply gimme-the-lint's baseline rules, copy the `[tool.ruff*]` tables (or the
+`biome.json` contents) from the `templates/` directory of the installed
+package, or re-run with `--force`.
+
+## Clippy `[lints.clippy]` was not added to `Cargo.toml`
+
+`install` appends the `[lints.clippy]` table only if `Cargo.toml` has no
+`[lints]` (or `[workspace.lints]`) table already. If one exists, merge the block
+from `templates/clippy-cargo-lints.template.toml` yourself. For a workspace, the
+table belongs in the root `Cargo.toml` under `[workspace.lints.clippy]`.
+
 ## Reset everything
 
 Delete `.gtl/` and run `gimme-the-lint baseline` to rebuild from scratch.

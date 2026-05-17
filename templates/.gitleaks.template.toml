@@ -45,6 +45,18 @@ regex = '''(?i)(postgresql|postgres|mysql|mongodb)://[a-zA-Z0-9_-]+:([^@\s]+)@''
 tags = ["database", "password"]
 secretGroup = 2
 
+[[rules]]
+id = "private-key-pem"
+description = "Private key / SSL cert key (PEM, OpenSSH, PKCS)"
+regex = '''-----BEGIN ([A-Z]+ )?PRIVATE KEY( BLOCK)?-----'''
+tags = ["key", "private", "ssl"]
+
+[[rules]]
+id = "hardcoded-password"
+description = "Hardcoded password / secret assignment"
+regex = '''(?i)\b(password|passwd|pwd|secret)\b\s*[:=]\s*['"][^'"\s$]{6,}['"]'''
+tags = ["password", "secret"]
+
 # Allowlist (false positive prevention)
 [allowlist]
 description = "Allowlist for false positives"
