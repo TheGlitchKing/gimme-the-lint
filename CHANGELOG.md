@@ -31,7 +31,9 @@ per-directory linter adapters.
   fingerprints, so baselined violations survive code shifting in a file.
 - Linter adapter interface — each linter is a self-contained adapter.
 - **Go** support via `golangci-lint` and **Rust** support via `cargo clippy`,
-  alongside ESLint (JS/TS) and Ruff (Python).
+  alongside ESLint and **Biome** (JS/TS) and Ruff (Python).
+- **Biome** adapter: a `biome.json` binds an app to Biome and supersedes the
+  default ESLint binding for that app.
 - Polyglot project model: apps auto-discovered by walking for package
   manifests; monorepo workspaces handled; `_template-*` dirs skipped.
 - Per-app drift detection (app add/remove, config, linter version, age) —

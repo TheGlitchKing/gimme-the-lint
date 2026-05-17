@@ -35,8 +35,8 @@ describe('adapter registry', () => {
   });
 
   it('finds adapters by language', () => {
-    const js = adapters.adaptersForLanguage('javascript');
-    assert.deepStrictEqual(js.map((a) => a.id), ['eslint']);
+    const js = adapters.adaptersForLanguage('javascript').map((a) => a.id);
+    assert.ok(js.includes('eslint') && js.includes('biome'));
     const py = adapters.adaptersForLanguage('python');
     assert.deepStrictEqual(py.map((a) => a.id), ['ruff']);
   });
