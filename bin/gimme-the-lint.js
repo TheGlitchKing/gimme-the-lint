@@ -32,6 +32,8 @@ program
   .option('--frontend', 'Frontend only')
   .option('--backend', 'Backend only')
   .option('--force', 'Overwrite existing configs')
+  .option('--offline', 'Air-gapped install: no npm/pip fetches; toolchain assumed present')
+  .option('--no-baseline', 'Greenfield: write empty baselines (strict from day one)')
   .action(async (opts) => {
     const installer = require('../lib/installer');
     const chalk = require('chalk');
@@ -43,6 +45,9 @@ program
         frontend: opts.frontend !== undefined ? true : undefined,
         backend: opts.backend !== undefined ? true : undefined,
         force: opts.force,
+        offline: opts.offline,
+        // commander sets opts.baseline=false when --no-baseline is passed.
+        noBaseline: opts.baseline === false,
       });
 
       for (const step of result.steps) {
@@ -52,9 +57,20 @@ program
         console.log(chalk.yellow('  ⚠ ') + err);
       }
 
+      // Offline preflight gaps are a hard failure: provisioning is broken.
+      if (result.offlineGaps && result.offlineGaps.length > 0) {
+        console.error(
+          chalk.red(
+            `\n✗ Offline install: ${result.offlineGaps.length} linter(s) missing for present code.`
+          )
+        );
+        console.error(chalk.red('  Provision the toolchain (CodeArtifact / AMI) and retry.\n'));
+        process.exit(1);
+      }
+
       console.log(chalk.green('\n✓ Installation complete!\n'));
       console.log('Next steps:');
-      console.log('  gimme-the-lint baseline     Create LTTF baselines');
+      console.log('  gimme-the-lint baseline     Capture progressive-lint baselines');
       console.log('  gimme-the-lint hooks        Install git hooks');
       console.log('  gimme-the-lint dashboard    View linting status');
       console.log('');
@@ -96,9 +112,17 @@ program
   .option('--frontend', 'Frontend only')
   .option('--backend', 'Backend only')
   .option('--force', 'Overwrite existing configs')
+  .option('--offline', 'Air-gapped install: no npm/pip fetches; toolchain assumed present')
+  .option('--no-baseline', 'Greenfield: write empty baselines (strict from day one)')
   .action(async (opts) => {
-    // Delegate to install
-    await program.commands.find((c) => c.name() === 'install').parseAsync(['node', 'cmd', ...(opts.frontend ? ['--frontend'] : []), ...(opts.backend ? ['--backend'] : []), ...(opts.force ? ['--force'] : [])]);
+    // Delegate to install, forwarding every flag.
+    const args = ['node', 'cmd'];
+    if (opts.frontend) args.push('--frontend');
+    if (opts.backend) args.push('--backend');
+    if (opts.force) args.push('--force');
+    if (opts.offline) args.push('--offline');
+    if (opts.baseline === false) args.push('--no-baseline');
+    await program.commands.find((c) => c.name() === 'install').parseAsync(args);
   });
 
 program
@@ -129,13 +153,17 @@ program
   .command('baseline [target]')
   .description('Create or refresh progressive-lint baselines')
   .option('--strict', 'Fail when a linter is missing for code that is present')
+  .option('--empty', 'Write empty baselines (greenfield: treat every violation as new)')
   .action(async (target, opts) => {
     const chalk = require('chalk');
     const { runBaseline } = require('../lib/baseline');
     const { formatBaselineReport } = require('../lib/report');
     // [target] is accepted for backward compatibility; v2 baselines every unit.
     try {
-      const report = await runBaseline(process.cwd(), { strict: opts.strict });
+      const report = await runBaseline(process.cwd(), {
+        strict: opts.strict,
+        noBaseline: opts.empty,
+      });
       console.log(formatBaselineReport(report, process.cwd()));
       console.log('');
     } catch (err) {
