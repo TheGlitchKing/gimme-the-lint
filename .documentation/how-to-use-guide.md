@@ -54,6 +54,7 @@ gimme-the-lint walks the repo and binds each package to its linter:
 | `go.mod` | `golangci-lint` |
 | `Cargo.toml` | `clippy` |
 | `*.tf` / `*.tofu` files | `tflint` |
+| `ansible.cfg` / `galaxy.yml` | `ansible-lint` |
 
 Each app gets its own `.gtl/apps/<app>/baseline.json`. Drift is per app — a
 config or linter-version change in one app never churns another's baseline.
