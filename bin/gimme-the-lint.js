@@ -103,33 +103,44 @@ program
 
 program
   .command('check')
-  .description('Run progressive linting checks')
-  .option('--fix', 'Auto-fix violations')
-  .option('--verbose', 'Show detailed output')
-  .option('--frontend-only', 'Frontend only')
-  .option('--backend-only', 'Backend only')
-  .option('--all', 'Lint entire codebase')
-  .action((opts) => {
-    const args = [];
-    if (opts.fix) args.push('--fix');
-    if (opts.verbose) args.push('--verbose');
-    if (opts.frontendOnly) args.push('--frontend-only');
-    if (opts.backendOnly) args.push('--backend-only');
-    if (opts.all) args.push('--all');
-    runScript('run-checks.sh', args.join(' '));
+  .description('Run progressive linting checks (only NEW violations block)')
+  .option('--fix', 'Auto-fix violations where the linter supports it')
+  .option('--all', 'Lint the entire codebase, not just staged changes')
+  .option('--strict', 'Fail when a linter is missing for code that is present')
+  .action(async (opts) => {
+    const chalk = require('chalk');
+    const { runCheck } = require('../lib/check');
+    const { formatCheckReport } = require('../lib/report');
+    try {
+      const report = await runCheck(process.cwd(), {
+        fix: opts.fix,
+        changedOnly: !opts.all,
+        strict: opts.strict,
+      });
+      console.log(formatCheckReport(report));
+      process.exit(report.ok ? 0 : 1);
+    } catch (err) {
+      console.error(chalk.red(`\n✗ ${err.message}\n`));
+      process.exit(1);
+    }
   });
 
 program
   .command('baseline [target]')
-  .description('Create LTTF baselines (frontend, backend, or both)')
-  .action((target) => {
-    if (target === 'frontend') {
-      runScript('eslint-baseline.sh');
-    } else if (target === 'backend') {
-      runScript('ruff-baseline.sh');
-    } else {
-      runScript('eslint-baseline.sh');
-      runScript('ruff-baseline.sh');
+  .description('Create or refresh progressive-lint baselines')
+  .option('--strict', 'Fail when a linter is missing for code that is present')
+  .action(async (target, opts) => {
+    const chalk = require('chalk');
+    const { runBaseline } = require('../lib/baseline');
+    const { formatBaselineReport } = require('../lib/report');
+    // [target] is accepted for backward compatibility; v2 baselines every unit.
+    try {
+      const report = await runBaseline(process.cwd(), { strict: opts.strict });
+      console.log(formatBaselineReport(report, process.cwd()));
+      console.log('');
+    } catch (err) {
+      console.error(chalk.red(`\n✗ ${err.message}\n`));
+      process.exit(1);
     }
   });
 
