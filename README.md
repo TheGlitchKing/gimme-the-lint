@@ -19,7 +19,7 @@ stuff at its own pace; meanwhile no new mess gets in.
 **v2.0** generalizes that idea to any linter and any language. It is no longer
 "ESLint + Ruff for webapps" — it is a progressive-lint **engine** with a
 pluggable **linter adapter** for each tool, across **JavaScript/TypeScript, Python,
-Go, and Rust**, in **any monorepo shape**.
+Go, Rust, and Terraform**, in **any monorepo shape**.
 
 ---
 
@@ -38,8 +38,10 @@ is ever flagged. (In v1 this job was outsourced to the third-party
 
 Each app is bound to the linters its package manifest implies — `package.json`
 → ESLint, `pyproject.toml` → Ruff, `go.mod` → golangci-lint, `Cargo.toml` →
-Clippy, `biome.json` → Biome. Drift detection runs per app, so a config or
-linter-version change in one app never churns the baselines of another.
+Clippy, `biome.json` → Biome. Terraform has no manifest, so a directory of
+`*.tf` / `*.tofu` files binds to tflint by extension. Drift detection runs per
+app, so a config or linter-version change in one app never churns the baselines
+of another.
 
 ---
 
@@ -48,7 +50,7 @@ linter-version change in one app never churns the baselines of another.
 - **Progressive linting** — only new violations block; existing ones are baselined
 - **In-house diff engine** — line/column-independent fingerprints survive code shifts
 - **Pluggable linter adapters** — the choice of linter is config, not a hardcode
-- **Polyglot** — JavaScript/TypeScript, Python, Go, Rust out of the box
+- **Polyglot** — JavaScript/TypeScript, Python, Go, Rust, Terraform out of the box
 - **Per-app model** — auto-discovers every package in a monorepo; no `frontend/`
   + `backend/` assumption
 - **Per-app drift detection** — app add/remove, config change, linter version, age
@@ -68,6 +70,7 @@ linter-version change in one app never churns the baselines of another.
 | Python | `ruff` | `pyproject.toml`, `requirements.txt`, `setup.py` |
 | Go | `golangci-lint` | `go.mod` |
 | Rust | `clippy` (`cargo clippy`) | `Cargo.toml` |
+| Terraform / OpenTofu | `tflint` | `*.tf` / `*.tofu` files (no manifest) |
 
 ---
 
@@ -262,7 +265,7 @@ lib/
 ├── diff-engine.js      pure diff: new vs baselined vs fixed
 ├── baseline-store.js   one baseline.json format for every linter
 ├── adapters/           one adapter per linter (eslint, biome, ruff,
-│                       golangci-lint, clippy) + the base contract
+│                       golangci-lint, clippy, tflint) + the base contract
 ├── project-model.js    discovers apps + binds them to linters
 ├── units.js            resolves apps → {dir, linters, baseline path}
 ├── check.js            runCheck: lint → diff → report
@@ -282,7 +285,7 @@ git hooks, GitHub Action and Claude Code plugin are thin front doors over it.
 - **Node.js** >= 20
 - **Git** (for hooks and staged-file detection)
 - A linter for each language you use (`eslint`/`biome`, `ruff`, `golangci-lint`,
-  `clippy`) — any language whose linter is absent is simply skipped
+  `clippy`, `tflint`) — any language whose linter is absent is simply skipped
 
 ## License
 

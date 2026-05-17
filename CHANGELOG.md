@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-05-17
+
+### Added
+- **Terraform / OpenTofu support** via a new `tflint` linter adapter. tflint
+  plugs into the same progressive-lint engine as every other linter: baselines
+  are captured into `.gtl/apps/<app>/baseline.json` under a `tflint` section,
+  fingerprinted by `file + rule + message`, and only new violations block.
+  - Runs `tflint --format=json`, module-scoped (executes inside the module
+    directory for compatibility with tflint versions predating `--chdir`).
+  - Parses both `issues` and `errors` — broken HCL surfaces as a blocking
+    error rather than slipping through as zero issues.
+  - Supports `--fix`; tracks config drift on `.tflint.hcl`.
+- **Extension-based app discovery** for Terraform: a directory containing
+  `*.tf` / `*.tofu` source is auto-discovered and bound to `tflint`. Terraform
+  has no manifest file, so it is discovered by extension rather than by a
+  manifest like `package.json` or `go.mod`. In the root-module layout (`.tf`
+  at the repo root *and* in `modules/*/`), the root is treated as a workspace
+  root — bind `.` explicitly in `gimme-the-lint.config.js` to lint it. See the
+  installation guide.
+
 ## [2.0.0] - 2026-05-17
 
 A ground-up rearchitecture: gimme-the-lint is now a language-agnostic
