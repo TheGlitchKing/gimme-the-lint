@@ -1,5 +1,5 @@
 name: 'gimme-the-lint'
-description: 'Progressive linting with directory-chunked baselines, drift detection, and auto-healing'
+description: 'Polyglot progressive linting — only NEW violations above the baseline block CI'
 author: 'TheGlitchKing'
 
 branding:
@@ -8,51 +8,41 @@ branding:
 
 inputs:
   mode:
-    description: 'Linting mode: progressive (changed files only) or full (entire codebase)'
+    description: 'progressive (staged changes) or full (entire codebase)'
     required: false
-    default: 'progressive'
+    default: 'full'
   fix:
-    description: 'Auto-fix violations when possible'
+    description: 'Auto-fix violations where the linter supports it'
     required: false
     default: 'false'
-  frontend:
-    description: 'Enable frontend linting (ESLint)'
+  strict:
+    description: 'Fail when a linter is missing for code that is present'
     required: false
-    default: 'true'
-  backend:
-    description: 'Enable backend linting (Ruff/Python)'
-    required: false
-    default: 'true'
-  python-version:
-    description: 'Python version for backend linting'
-    required: false
-    default: '3.13'
+    default: 'false'
   node-version:
     description: 'Node.js version'
     required: false
     default: '22'
+  python-version:
+    description: 'Python version (for Ruff); leave blank to skip Python setup'
+    required: false
+    default: '3.13'
   working-directory:
     description: 'Working directory (defaults to repo root)'
     required: false
     default: '.'
   comment-on-pr:
-    description: 'Post linting summary as PR comment'
+    description: 'Post the linting summary as a PR comment'
     required: false
     default: 'true'
 
 outputs:
-  frontend-status:
-    description: 'Frontend linting result (pass/fail/skip)'
-    value: ${{ steps.lint.outputs.frontend_status }}
-  backend-status:
-    description: 'Backend linting result (pass/fail/skip)'
-    value: ${{ steps.lint.outputs.backend_status }}
-  drift-detected:
-    description: 'Whether baseline drift was detected'
-    value: ${{ steps.lint.outputs.drift_detected }}
-  violations-count:
-    description: 'Total number of new violations'
-    value: ${{ steps.lint.outputs.violations_count }}
+  status:
+    description: 'Overall result: pass or fail'
+    value: ${{ steps.lint.outputs.status }}
+  new-violations:
+    description: 'Number of new violations above the baseline'
+    value: ${{ steps.lint.outputs.new_violations }}
 
 runs:
   using: 'composite'
@@ -63,192 +53,37 @@ runs:
         node-version: ${{ inputs.node-version }}
 
     - name: Setup Python
-      if: inputs.backend == 'true'
+      if: inputs.python-version != ''
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Cache node modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ inputs.working-directory }}/node_modules
-          ${{ inputs.working-directory }}/frontend/node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}
-        restore-keys: ${{ runner.os }}-node-
-
-    - name: Cache Python venv
-      if: inputs.backend == 'true'
-      uses: actions/cache@v4
-      with:
-        path: ${{ inputs.working-directory }}/.venv
-        key: ${{ runner.os }}-venv-${{ inputs.python-version }}-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
-        restore-keys: ${{ runner.os }}-venv-${{ inputs.python-version }}-
-
-    - name: Install frontend dependencies
-      if: inputs.frontend == 'true'
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        if [ -f "frontend/package.json" ]; then
-          cd frontend && npm ci --prefer-offline 2>/dev/null || npm install
-        elif [ -f "package.json" ]; then
-          npm ci --prefer-offline 2>/dev/null || npm install
-        fi
-
-    - name: Setup Python venv
-      if: inputs.backend == 'true'
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        if [ ! -d ".venv" ]; then
-          python -m venv .venv
-        fi
-        source .venv/bin/activate
-        pip install --quiet --upgrade pip
-        pip install --quiet ruff mypy
-        # Install project deps if available
-        for req in backend/requirements.txt requirements.txt; do
-          if [ -f "$req" ]; then
-            pip install --quiet -r "$req" 2>/dev/null || true
-            break
-          fi
-        done
-        deactivate
-
+    # Linter binaries: gimme-the-lint idempotently skips any language whose
+    # linter is absent (or fails it under --strict). Install the linters your
+    # repo uses here, or rely on toolchains the runner already provides
+    # (Go and Rust are preinstalled on GitHub-hosted runners).
     - name: Run progressive linting
       id: lint
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      env:
-        GIMME_PROJECT_ROOT: ${{ inputs.working-directory }}
       run: |
-        # Build args
         ARGS=""
-        if [ "${{ inputs.mode }}" = "full" ]; then
-          ARGS="--all"
-        fi
-        if [ "${{ inputs.fix }}" = "true" ]; then
-          ARGS="$ARGS --fix"
-        fi
-        if [ "${{ inputs.frontend }}" = "false" ]; then
-          ARGS="$ARGS --backend-only"
-        fi
-        if [ "${{ inputs.backend }}" = "false" ]; then
-          ARGS="$ARGS --frontend-only"
-        fi
+        [ "${{ inputs.mode }}" = "full" ] && ARGS="$ARGS --all"
+        [ "${{ inputs.fix }}" = "true" ] && ARGS="$ARGS --fix"
+        [ "${{ inputs.strict }}" = "true" ] && ARGS="$ARGS --strict"
 
-        # Find gimme-the-lint scripts
-        SCRIPT_DIR=""
-        if [ -d "node_modules/@theglitchking/gimme-the-lint/scripts" ]; then
-          SCRIPT_DIR="node_modules/@theglitchking/gimme-the-lint/scripts"
-        elif [ -d "node_modules/gimme-the-lint/scripts" ]; then
-          SCRIPT_DIR="node_modules/gimme-the-lint/scripts"
-        fi
+        EXIT=0
+        npx --yes @theglitchking/gimme-the-lint check $ARGS \
+          2>&1 | tee /tmp/gimme-lint-output.log || EXIT=${PIPESTATUS[0]}
 
-        # Initialize outputs
-        echo "frontend_status=skip" >> $GITHUB_OUTPUT
-        echo "backend_status=skip" >> $GITHUB_OUTPUT
-        echo "drift_detected=false" >> $GITHUB_OUTPUT
-        echo "violations_count=0" >> $GITHUB_OUTPUT
+        NEW=$(grep -oE '[0-9]+ new violation' /tmp/gimme-lint-output.log \
+          | head -1 | grep -oE '[0-9]+' || echo "0")
+        echo "new_violations=$NEW" >> $GITHUB_OUTPUT
 
-        FRONTEND_EXIT=0
-        BACKEND_EXIT=0
-
-        if [ -n "$SCRIPT_DIR" ]; then
-          # Use installed scripts
-          bash "$SCRIPT_DIR/run-checks.sh" $ARGS 2>&1 | tee /tmp/gimme-lint-output.log || true
-          FRONTEND_EXIT=${PIPESTATUS[0]}
+        if [ "$EXIT" -eq 0 ]; then
+          echo "status=pass" >> $GITHUB_OUTPUT
         else
-          # Inline linting (no gimme-the-lint installed, run tools directly)
-          echo "gimme-the-lint not found in node_modules, running linters directly"
-
-          # Load directory config from gimme-the-lint.config.cjs or .js if present
-          GIMME_FRONTEND_DIR=""
-          GIMME_BACKEND_DIR=""
-          GIMME_SRC_DIR=""
-          GIMME_APP_DIR=""
-          GIMME_CONFIG=""
-          if [ -f "gimme-the-lint.config.cjs" ]; then
-            GIMME_CONFIG="$(pwd)/gimme-the-lint.config.cjs"
-          elif [ -f "gimme-the-lint.config.js" ]; then
-            GIMME_CONFIG="$(pwd)/gimme-the-lint.config.js"
-          fi
-          if [ -n "$GIMME_CONFIG" ]; then
-            eval "$(node -e "
-              try {
-                const cfg = require('${GIMME_CONFIG}');
-                if (cfg.frontendDir) console.log('GIMME_FRONTEND_DIR=' + cfg.frontendDir);
-                if (cfg.backendDir)  console.log('GIMME_BACKEND_DIR='  + cfg.backendDir);
-                if (cfg.srcDir)      console.log('GIMME_SRC_DIR='      + cfg.srcDir);
-                if (cfg.appDir)      console.log('GIMME_APP_DIR='      + cfg.appDir);
-              } catch(e) {}
-            " 2>/dev/null || true)"
-          fi
-
-          # Frontend
-          if [ "${{ inputs.frontend }}" = "true" ]; then
-            FRONTEND_TARGET=""
-            if [ -n "$GIMME_FRONTEND_DIR" ] && [ -d "$GIMME_FRONTEND_DIR" ]; then
-              FRONTEND_TARGET="${GIMME_FRONTEND_DIR}/${GIMME_SRC_DIR:-src}"
-            elif [ -d "frontend" ]; then
-              FRONTEND_TARGET="frontend/src"
-            elif [ -d "src" ]; then
-              FRONTEND_TARGET="src"
-            fi
-            if [ -n "$FRONTEND_TARGET" ] && [ -d "$FRONTEND_TARGET" ]; then
-              npx eslint "$FRONTEND_TARGET/" 2>&1 | tee -a /tmp/gimme-lint-output.log || FRONTEND_EXIT=$?
-            fi
-          fi
-
-          # Backend
-          if [ "${{ inputs.backend }}" = "true" ]; then
-            if [ -f ".venv/bin/activate" ]; then
-              source .venv/bin/activate
-              BACKEND_TARGET=""
-              if [ -n "$GIMME_BACKEND_DIR" ] && [ -d "$GIMME_BACKEND_DIR" ]; then
-                BACKEND_TARGET="${GIMME_BACKEND_DIR}/${GIMME_APP_DIR:-app}"
-              elif [ -d "backend/app" ]; then
-                BACKEND_TARGET="backend/app"
-              elif [ -d "app" ]; then
-                BACKEND_TARGET="app"
-              fi
-              if [ -n "$BACKEND_TARGET" ]; then
-                ruff check "$BACKEND_TARGET" 2>&1 | tee -a /tmp/gimme-lint-output.log || BACKEND_EXIT=$?
-              fi
-              deactivate
-            fi
-          fi
-        fi
-
-        # Set outputs based on results
-        if [ "${{ inputs.frontend }}" = "true" ]; then
-          if [ $FRONTEND_EXIT -eq 0 ]; then
-            echo "frontend_status=pass" >> $GITHUB_OUTPUT
-          else
-            echo "frontend_status=fail" >> $GITHUB_OUTPUT
-          fi
-        fi
-
-        if [ "${{ inputs.backend }}" = "true" ]; then
-          if [ $BACKEND_EXIT -eq 0 ]; then
-            echo "backend_status=pass" >> $GITHUB_OUTPUT
-          else
-            echo "backend_status=fail" >> $GITHUB_OUTPUT
-          fi
-        fi
-
-        # Check for drift in output
-        if grep -q "Drift Detected" /tmp/gimme-lint-output.log 2>/dev/null; then
-          echo "drift_detected=true" >> $GITHUB_OUTPUT
-        fi
-
-        # Count violations
-        VIOLS=$(grep -c "error\|warning" /tmp/gimme-lint-output.log 2>/dev/null || echo "0")
-        echo "violations_count=$VIOLS" >> $GITHUB_OUTPUT
-
-        # Exit with failure if violations found
-        if [ $FRONTEND_EXIT -ne 0 ] || [ $BACKEND_EXIT -ne 0 ]; then
+          echo "status=fail" >> $GITHUB_OUTPUT
           exit 1
         fi
 
@@ -258,37 +93,29 @@ runs:
       with:
         script: |
           const fs = require('fs');
-          let output = '';
+          let output = 'No lint output captured.';
           try {
             output = fs.readFileSync('/tmp/gimme-lint-output.log', 'utf8');
-          } catch { output = 'No lint output captured.'; }
+          } catch { /* keep default */ }
 
-          const frontendStatus = '${{ steps.lint.outputs.frontend_status }}';
-          const backendStatus = '${{ steps.lint.outputs.backend_status }}';
-          const driftDetected = '${{ steps.lint.outputs.drift_detected }}';
-          const violations = '${{ steps.lint.outputs.violations_count }}';
-
-          const statusIcon = (s) => s === 'pass' ? ':white_check_mark:' : s === 'fail' ? ':x:' : ':fast_forward:';
+          const status = '${{ steps.lint.outputs.status }}';
+          const newViolations = '${{ steps.lint.outputs.new_violations }}';
+          const icon = status === 'pass' ? ':white_check_mark:' : ':x:';
 
           let body = `## gimme-the-lint Results\n\n`;
-          body += `| Component | Status |\n|---|---|\n`;
-          body += `| Frontend (ESLint) | ${statusIcon(frontendStatus)} ${frontendStatus} |\n`;
-          body += `| Backend (Ruff) | ${statusIcon(backendStatus)} ${backendStatus} |\n`;
-          if (driftDetected === 'true') {
-            body += `\n:warning: **Baseline drift detected** - consider running \`gimme-the-lint baseline\`\n`;
-          }
-          if (parseInt(violations) > 0) {
-            body += `\n<details><summary>Lint Output (${violations} issues)</summary>\n\n\`\`\`\n${output.slice(-3000)}\n\`\`\`\n</details>\n`;
+          body += `${icon} **${status}** — ${newViolations} new violation(s) above the baseline\n`;
+          if (parseInt(newViolations, 10) > 0) {
+            body += `\n<details><summary>Lint output</summary>\n\n\`\`\`\n`;
+            body += `${output.slice(-3000)}\n\`\`\`\n</details>\n`;
           }
           body += `\n---\n*Generated by [gimme-the-lint](https://github.com/TheGlitchKing/gimme-the-lint)*`;
 
-          // Find and update existing comment or create new
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,
             repo: context.repo.repo,
             issue_number: context.issue.number,
           });
-          const existing = comments.find(c => c.body.includes('gimme-the-lint Results'));
+          const existing = comments.find((c) => c.body.includes('gimme-the-lint Results'));
           if (existing) {
             await github.rest.issues.updateComment({
               owner: context.repo.owner,

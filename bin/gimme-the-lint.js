@@ -173,6 +173,32 @@ program
   });
 
 program
+  .command('migrate')
+  .description('Migrate a v1 (.lttf) project to the v2 .gtl/ layout')
+  .option('--strict', 'Fail when a linter is missing for code that is present')
+  .action(async (opts) => {
+    const chalk = require('chalk');
+    const { migrate } = require('../lib/migrate');
+    try {
+      const result = await migrate(process.cwd(), { strict: opts.strict });
+      if (!result.migrated) {
+        console.log(chalk.yellow(`\n${result.reason}\n`));
+        return;
+      }
+      console.log(chalk.green('\n✓ Migrated to the v2 .gtl/ layout\n'));
+      console.log(`  Legacy baselines backed up: ${result.backedUp.join(', ')}`);
+      console.log(chalk.dim(`    → ${result.backupPath}`));
+      console.log(`  Re-baselined ${result.baseline.unitCount} app(s) into .gtl/`);
+      console.log('');
+      console.log('Next: review the new .gtl/ directory and commit it.');
+      console.log('');
+    } catch (err) {
+      console.error(chalk.red(`\n✗ Migration failed: ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
   .command('dashboard')
   .description('Show the progressive linting dashboard (baselines + drift)')
   .action(async () => {
