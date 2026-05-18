@@ -127,5 +127,6 @@ It backs the legacy `.lttf/` + `.lttf-ruff/` directories up under
 gimme-the-lint uninstall
 ```
 
-Removes git hooks and `gimme-the-lint.config.js`. Baselines (`.gtl/`), linter
-configs, and `.venv` are left in place — remove them manually if desired.
+Removes git hooks and a repo-root `gimme-the-lint.config.js`. Everything under
+`.gtl/` (baselines, manifest, and a `.gtl/config.js`), linter configs, and
+`.venv` are left in place — remove them manually if desired.

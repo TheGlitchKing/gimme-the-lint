@@ -86,6 +86,7 @@ program
   .action(async () => {
     const chalk = require('chalk');
     const gitHooksManager = require('../lib/git-hooks-manager');
+    const configManager = require('../lib/config-manager');
 
     console.log(chalk.blue('\ngimme-the-lint: Uninstalling...\n'));
 
@@ -94,10 +95,17 @@ program
       console.log(chalk.green(`  ✓ Removed git hooks: ${removed.join(', ')}`));
     }
 
-    const configPath = path.join(process.cwd(), 'gimme-the-lint.config.js');
-    if (fs.existsSync(configPath)) {
-      fs.unlinkSync(configPath);
-      console.log(chalk.green('  ✓ Removed gimme-the-lint.config.js'));
+    // Remove a repo-root config. A config under .gtl/ is left in place — it is
+    // part of the .gtl/ directory, which uninstall preserves.
+    const cfgPath = configManager.findConfig(process.cwd());
+    if (cfgPath) {
+      const rel = path.relative(process.cwd(), cfgPath);
+      if (rel.startsWith(`.gtl${path.sep}`)) {
+        console.log(chalk.dim(`  · Config kept (${rel} — part of .gtl/)`));
+      } else {
+        fs.unlinkSync(cfgPath);
+        console.log(chalk.green(`  ✓ Removed ${path.basename(cfgPath)}`));
+      }
     }
 
     console.log(chalk.green('\n✓ Uninstall complete.\n'));
@@ -372,7 +380,7 @@ program
     const projectType = await configManager.detectProjectType(projectRoot);
     const venvStatus = venvManager.getStatus(projectRoot);
     const hookStatus = await gitHooksManager.getStatus(projectRoot);
-    const configExists = fs.existsSync(path.join(projectRoot, 'gimme-the-lint.config.js'));
+    const configExists = Boolean(configManager.findConfig(projectRoot));
 
     console.log(chalk.blue('\ngimme-the-lint Status\n'));
     console.log(`  Project type:  ${projectType}`);

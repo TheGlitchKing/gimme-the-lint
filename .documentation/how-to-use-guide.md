@@ -78,7 +78,9 @@ Guide** for the baseline rules per codebase and how to adjust them.
 
 ## Configuration
 
-Auto-detection needs no config. To override, add `gimme-the-lint.config.js`:
+Auto-detection needs no config. To override, add `.gtl/config.js` (the
+canonical location — a repo-root `gimme-the-lint.config.js` is still read for
+back-compatibility):
 
 ```js
 module.exports = {

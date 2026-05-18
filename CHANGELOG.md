@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-05-17
+
+### Added
+- **`.gtl/config.js` — consolidated config location.** gimme-the-lint's own
+  config file now lives canonically at `.gtl/config.js` (`.gtl/config.cjs` for
+  ESM projects), so it travels with the committed `.gtl/` baselines rather than
+  sitting loose at the repo root. `install` and `migrate` write new configs
+  there; `config-manager.findConfig()` resolves the location. A repo-root
+  `gimme-the-lint.config.js` is still read as a fallback — existing projects
+  need no change — and `.gtl/` wins when both exist. `uninstall` removes a
+  repo-root config but leaves a `.gtl/` one in place (it is part of the
+  preserved `.gtl/` directory). Linter configs (`eslint.config.js`,
+  `.tflint.hcl`, …) are unaffected: each linter resolves its own config from a
+  fixed location gimme-the-lint does not own.
+
 ## [2.4.0] - 2026-05-17
 
 ### Fixed
