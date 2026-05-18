@@ -189,9 +189,45 @@ program
   .description('Migrate a v1 (.lttf) project to the v2 .gtl/ layout')
   .option('--strict', 'Fail when a linter is missing for code that is present')
   .option('--allow-incomplete', 'Exit 0 even if some linters could not be baselined')
+  .option('--rules', 'Migrate baselines through rule renames/removals (no layout change)')
   .action(async (opts) => {
     const chalk = require('chalk');
-    const { migrate } = require('../lib/migrate');
+    const { migrate, migrateRules } = require('../lib/migrate');
+
+    // --rules: rewrite baseline fingerprints through the per-linter rule-alias
+    // maps. A standalone mode — it does not touch the .gtl/ layout.
+    if (opts.rules) {
+      try {
+        const result = await migrateRules(process.cwd());
+        if (!result.migrated) {
+          console.log(
+            chalk.yellow('\nNo rule migrations applied — baselines are up to date.\n')
+          );
+          return;
+        }
+        console.log(chalk.green('\n✓ Rule migration applied\n'));
+        for (const u of result.units) {
+          for (const l of u.linters) {
+            const renames = l.renamed
+              .map((r) => `${r.from}→${r.to}`)
+              .join(', ');
+            console.log(
+              `  ${u.app} · ${l.linter}: ` +
+                `${l.renamed.length} renamed${renames ? ` (${renames})` : ''}, ` +
+                `${l.dropped} dropped`
+            );
+          }
+        }
+        console.log('');
+        console.log('Review the updated .gtl/ baselines and commit them.');
+        console.log('');
+      } catch (err) {
+        console.error(chalk.red(`\n✗ Rule migration failed: ${err.message}\n`));
+        process.exit(1);
+      }
+      return;
+    }
+
     try {
       const result = await migrate(process.cwd(), { strict: opts.strict });
       if (!result.migrated) {
