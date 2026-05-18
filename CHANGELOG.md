@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-05-17
+
+### Fixed
+- **tflint config resolution is now root-aware.** In the standard Terraform
+  monorepo — one repo-root `.tflint.hcl`, many nested `modules/*` / `envs/*`
+  units — the adapter resolved config only in the unit directory, so every
+  unit was linted with tflint defaults: the repo's preset, plugin declarations
+  and `rule { enabled = false }` overrides were silently ignored and
+  `tflint --init` never ran. Meanwhile `configHashFor()` *did* find the
+  repo-root config, so the baseline's `config_hash` reflected a config the
+  linter never actually used — a silent correctness bug. A new shared resolver,
+  `LinterAdapter.resolveConfigPath()`, walks up from the unit directory to the
+  project root; `buildCommand()` and `initCommand()` now pass the resolved
+  file as an absolute `--config`, and `configHashFor()` hashes that same file —
+  the hashed config and the linted config can no longer disagree. A unit with
+  its own `.tflint.hcl` still wins (nearest-first); a repo with no config
+  anywhere still runs the zero-config core ruleset. The resolver is generic
+  (no provider name in code) and root-aware config-hashing now benefits every
+  adapter.
+
 ## [2.5.0] - 2026-05-17
 
 ### Added

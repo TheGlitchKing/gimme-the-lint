@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Official marketplace for gimme-the-lint - polyglot progressive linting with per-app baselines and drift detection",
-    "version": "2.5.0"
+    "version": "2.5.1"
   },
   "plugins": [
     {
       "name": "gimme-the-lint",
       "description": "Polyglot progressive linting for monorepos — adapter-driven baselines, per-app drift detection, and idempotent skips across JavaScript/TypeScript, Python, Go, Rust, Terraform, and Ansible.",
-      "version": "2.5.0",
+      "version": "2.5.1",
       "author": {
         "name": "TheGlitchKing"
       },
