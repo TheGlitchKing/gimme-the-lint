@@ -19,7 +19,8 @@ describe('drift — app added/removed', () => {
 
   before(async () => {
     await fs.ensureDir(path.join(TMP, 'apps', 'a'));
-    await fs.writeFile(path.join(TMP, 'apps', 'a', 'package.json'), '{}');
+    await fs.writeFile(path.join(TMP, 'apps', 'a', 'package.json'), '{"dependencies":{}}');
+    await fs.writeFile(path.join(TMP, 'apps', 'a', 'index.js'), 'export const a = 1;\n');
   });
   after(async () => {
     await fs.remove(TMP);
@@ -34,7 +35,8 @@ describe('drift — app added/removed', () => {
 
   it('detects a newly added app', async () => {
     await fs.ensureDir(path.join(TMP, 'apps', 'b'));
-    await fs.writeFile(path.join(TMP, 'apps', 'b', 'package.json'), '{}');
+    await fs.writeFile(path.join(TMP, 'apps', 'b', 'package.json'), '{"dependencies":{}}');
+    await fs.writeFile(path.join(TMP, 'apps', 'b', 'index.js'), 'export const b = 1;\n');
     const drift = await detectDrift(TMP);
     assert.strictEqual(drift.hasDrift, true);
     assert.deepStrictEqual(drift.addedApps, ['apps/b']);

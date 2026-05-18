@@ -159,7 +159,7 @@ describe('writeLinterConfigs — polyglot project', () => {
     await fs.ensureDir(TMP);
     // JS app — eslint (also gets Prettier).
     await fs.ensureDir(path.join(TMP, 'apps/web'));
-    await fs.writeFile(path.join(TMP, 'apps/web/package.json'), '{"name":"web"}');
+    await fs.writeFile(path.join(TMP, 'apps/web/package.json'), '{"name":"web","dependencies":{}}');
     // Go app — golangci-lint.
     await fs.ensureDir(path.join(TMP, 'apps/api'));
     await fs.writeFile(path.join(TMP, 'apps/api/go.mod'), 'module api\n');

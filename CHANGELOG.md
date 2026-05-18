@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-05-17
+
+### Fixed
+- **tflint silent-failure on uninitialized ruleset plugins.** When a unit
+  carries a `.tflint.hcl`, tflint requires `tflint --init` before linting; the
+  adapter never ran it, so a failed run was recorded as a clean zero-violation
+  baseline that mis-gated every later commit. Adapters gain an `initCommand()`
+  hook (run once per directory); the tflint adapter runs `tflint --init` when a
+  `.tflint.hcl` is present. `parse()` now takes `(stdout, stderr, code)` — a
+  non-zero exit with no parseable JSON emits a high-severity `tflint-error`
+  violation, never a silent clean pass.
+- **eslint false-positive on a tooling-only `package.json`.** Discovery bound
+  eslint on the filename alone, so a devDependencies-only, source-free
+  `package.json` (one that merely pins a tooling dependency) became an eslint
+  app. `package.json` is now a conditional marker — eslint is bound only when
+  the directory looks like a real JS app (runtime deps / entry-point fields /
+  JS-TS source / an eslint or biome config). `EslintAdapter.detect()` is
+  likewise tightened so a bare `package.json` is insufficient.
+- **tflint `available()` over-reporting.** It returned true even when ruleset
+  plugins a `.tflint.hcl` declared were not installed, disagreeing with
+  `lint()`. It now verifies every declared plugin resolves.
+- **`.terraform.lock.hcl` removed from the tflint manifest files** — it is a
+  provider-lock file written by `terraform init`, not a tflint signal.
+
+### Added
+- **Generic ruleset-plugin version tracking.** `TflintAdapter.rulesetVersions()`
+  parses `tflint --version` into a `{ ruleset: version }` map — no ruleset name
+  is special-cased. A new `ruleset_versions` field is threaded through
+  baselines and the global manifest; drift detection emits a `ruleset` drift
+  entry when a plugin version changes, catching a plugin update under a loose
+  `.tflint.hcl` version constraint that left `config_hash` and `tool_version`
+  untouched.
+- **Rule rename/removal migration.** Per-linter rule-alias maps
+  (`lib/rule-aliases.js`) plus `gimme-the-lint migrate --rules`: re-lints each
+  unit and rewrites a renamed rule's baseline fingerprint old→new (preserving
+  the grandfather count), drops entries for rules that no longer occur, and
+  corrects `total`. A genuinely new violation is never grandfathered.
+
+### Changed
+- **`tflint.parse()` signature** is now `(stdout, stderr, code)`, matching the
+  base adapter contract.
+- **Removed the dead v1 drift path.** `lib/drift-detector.js` (superseded by
+  `lib/drift.js`) is deleted; `lib/manifest-manager.js` is slimmed to its one
+  live function, `hashFile()` — the v2 global manifest is owned by
+  `lib/gtl-manifest.js`.
+
+### Design
+- The tflint adapter never names a cloud provider. The bundled `terraform`
+  ruleset lints any Terraform repo with zero config; provider-specific rulesets
+  are opt-in and owned entirely by the target repo's own `.tflint.hcl`, which
+  the adapter parses generically for whatever `plugin` blocks it declares.
+
 ## [2.3.0] - 2026-05-17
 
 ### Fixed

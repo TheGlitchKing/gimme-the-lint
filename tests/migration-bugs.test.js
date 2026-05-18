@@ -95,9 +95,15 @@ describe('Bug B — discovery binds the right directories', () => {
     );
     // Real JS apps with their own manifests.
     await fs.ensureDir(path.join(TMP, 'frontend'));
-    await fs.writeFile(path.join(TMP, 'frontend', 'package.json'), '{"name":"fe"}');
+    await fs.writeFile(
+      path.join(TMP, 'frontend', 'package.json'),
+      '{"name":"fe","dependencies":{"vite":"^5"}}'
+    );
     await fs.ensureDir(path.join(TMP, 'keycloakify'));
-    await fs.writeFile(path.join(TMP, 'keycloakify', 'package.json'), '{"name":"kc"}');
+    await fs.writeFile(
+      path.join(TMP, 'keycloakify', 'package.json'),
+      '{"name":"kc","dependencies":{"keycloakify":"^11"}}'
+    );
   });
   after(async () => {
     await fs.remove(TMP);

@@ -28,12 +28,12 @@ describe('project-model', () => {
   describe('discoverApps — polyglot monorepo', () => {
     before(async () => {
       await fs.ensureDir(TMP);
-      await makeManifest('apps/orders-api', 'package.json');
+      await makeManifest('apps/orders-api', 'package.json', '{"dependencies":{"react":"^18"}}');
       await makeManifest('apps/orders-worker', 'pyproject.toml', '[project]\n');
       await makeManifest('apps/billing-events', 'go.mod', 'module billing\n');
       await makeManifest('apps/audit-stream', 'Cargo.toml', '[package]\n');
       // A template directory that must be skipped.
-      await makeManifest('apps/_template-svc', 'package.json');
+      await makeManifest('apps/_template-svc', 'package.json', '{"dependencies":{}}');
     });
 
     after(async () => {
@@ -72,7 +72,7 @@ describe('project-model', () => {
       await fs.ensureDir(WS);
       await fs.writeFile(path.join(WS, 'package.json'), '{"workspaces":["packages/*"]}');
       await fs.ensureDir(path.join(WS, 'packages', 'web'));
-      await fs.writeFile(path.join(WS, 'packages', 'web', 'package.json'), '{}');
+      await fs.writeFile(path.join(WS, 'packages', 'web', 'package.json'), '{"dependencies":{}}');
     });
     after(async () => {
       await fs.remove(WS);
