@@ -78,6 +78,8 @@ describe('adapter detection', () => {
     await fs.ensureDir(TMP);
     await fs.ensureDir(path.join(TMP, 'js-app'));
     await fs.writeFile(path.join(TMP, 'js-app', 'package.json'), '{}');
+    // A real JS app has source — a bare package.json no longer self-detects.
+    await fs.writeFile(path.join(TMP, 'js-app', 'index.js'), 'export const x = 1;\n');
     await fs.ensureDir(path.join(TMP, 'py-app'));
     await fs.writeFile(path.join(TMP, 'py-app', 'main.py'), 'x = 1\n');
     await fs.ensureDir(path.join(TMP, 'empty'));
