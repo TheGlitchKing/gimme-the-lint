@@ -173,7 +173,10 @@ git add -A && git commit -m "…" # retry
 ## Configuration
 
 Zero config is the default — apps and their linters are auto-detected. To
-override, add `gimme-the-lint.config.js` at the repo root:
+override, add a config file. The canonical location is **`.gtl/config.js`**
+(it travels with the committed `.gtl/` baselines); a repo-root
+`gimme-the-lint.config.js` is also read, for back-compatibility. `install` and
+`migrate` write new configs to `.gtl/`:
 
 ```js
 module.exports = {
