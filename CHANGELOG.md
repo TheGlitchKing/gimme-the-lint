@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2] - 2026-05-21
+
+### Changed
+- **Package description names every supported linter.** The npm/`--help`
+  description previously listed languages only (`JavaScript/TypeScript, Python,
+  Go, Rust, Terraform, and Ansible`), so someone searching for "does this
+  support tflint?" couldn't tell from `--help` or the npmjs.com page. The
+  description now spells out language → linter pairs: JavaScript/TypeScript
+  (ESLint, Biome), Python (Ruff), Go (golangci-lint), Rust (Clippy),
+  Terraform/OpenTofu (tflint), Ansible (ansible-lint). Metadata-only change
+  across `package.json`, `.claude-plugin/plugin.json`, and
+  `.claude-plugin/marketplace.json`. No code changes.
+
 ## [2.5.1] - 2026-05-17
 
 ### Fixed
