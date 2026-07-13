@@ -479,6 +479,35 @@ def exceptions_have_reasons(records: list[ModelRecord], config: Config) -> Itera
                 )
 
 
+def unimportable_modules(failures: list, config: Config) -> Iterator[Violation]:
+    """A module we could not import — and therefore a set of models we could not check.
+
+    Two things are wrong at once, and the second is the one that matters here:
+
+    1. The module itself is broken. Whatever is in it will explode the moment anyone
+       imports it. (The first real codebase this ran against had a dead
+       backward-compat shim re-exporting a class renamed away years earlier.)
+
+    2. Its models are INVISIBLE to this checker. Their contract goes unchecked — and
+       without this violation it would go unchecked in silence, which is the one
+       thing this tool must never do.
+
+    Debt, not a defect: a mature codebase may well have one of these, and refusing to
+    run until it is fixed would recreate the "linter finds a thousand problems on day
+    one" disease. But it is LOUD, and it says exactly what went unseen.
+    """
+    for failure in failures:
+        yield _v(
+            R.UNIMPORTABLE_MODULE,
+            f"{failure.module}:unimportable",
+            f"`{failure.module}` cannot be imported ({failure.error}). Any models or schemas "
+            f"defined in it are INVISIBLE to the contract check — they are not clean, they are "
+            f"unchecked. Fix the module, or delete it if it is dead.",
+            file=failure.module.replace(".", "/") + ".py",
+            module=failure.module,
+        )
+
+
 def duplicate_schema_classes(dupes: list[dict], config: Config) -> Iterator[Violation]:
     """Two definitions of one name. If their fields differ, the app is already lying."""
     for dupe in dupes:

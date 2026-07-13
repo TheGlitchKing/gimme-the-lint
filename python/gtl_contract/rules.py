@@ -99,6 +99,18 @@ DUPLICATE_SCHEMA_CLASS = _r(
     "other existed.",
 )
 
+UNIMPORTABLE_MODULE = _r(
+    "contract/unimportable-module",
+    "A module in the models/schemas package cannot be imported.",
+    "Found on the very first run against a real codebase: app/models/folder.py was "
+    "a backward-compat shim re-exporting a `Folder` model that had been renamed away "
+    "years earlier. Nothing imported it, so it rotted in silence — and would have "
+    "exploded the instant anyone touched it. "
+    "It matters here for a second reason: whatever models live in a module we cannot "
+    "import are INVISIBLE to this checker. Their contract goes unchecked, and without "
+    "this rule it would go unchecked SILENTLY. The blind spot gets a name.",
+)
+
 
 # --- DEFECT: broken now, or certain to break. NEVER baselineable. ---------------
 
@@ -180,6 +192,7 @@ ALL_RULES: tuple[Rule, ...] = (
     WRITE_SCHEMA_NOT_STRICT,
     UNREGISTERED_WRITE_SURFACE,
     DUPLICATE_SCHEMA_CLASS,
+    UNIMPORTABLE_MODULE,
     RESERVED_METADATA_UNALIASED,
     UPDATE_HAS_CREATE_DEFAULT,
     RESPONSE_TYPE_MISMATCH,

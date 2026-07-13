@@ -84,12 +84,19 @@ class SqlAlchemyPydanticProvider:
                 f"(looked for: {', '.join(DEFAULT_MODEL_PACKAGES)})"
             )
 
+        # Modules we could not import. NOT fatal — each becomes a violation naming the
+        # blind spot it created. A configured PACKAGE that will not import is still
+        # fatal (there is nothing to check); a submodule is a hole we can describe.
+        failures: list[inventory.ImportFailure] = []
+
         try:
-            records = inventory.build(tuple(model_packages), tuple(schema_packages))
+            records = inventory.build(
+                tuple(model_packages), tuple(schema_packages), failures
+            )
         except Exception:
-            # Importing the app is the one genuinely dangerous thing we do. If it
-            # blows up we hand back the traceback and skip — we do NOT guess, and we
-            # do not pretend the app is clean.
+            # Importing the app is the one genuinely dangerous thing we do. If the
+            # configured package itself blows up we hand back the traceback and skip —
+            # we do NOT guess, and we do not pretend the app is clean.
             return ProviderResult.skipped(
                 "could not import the application's models",
                 detail=traceback.format_exc(limit=6),
@@ -105,13 +112,28 @@ class SqlAlchemyPydanticProvider:
                 "reported rather than passed: an empty inventory is not a clean one."
             )
 
-        violations: list[Violation] = []
+        violations: list[Violation] = list(checks.unimportable_modules(failures, config))
 
         for record in records:
-            # A model with no client write surface cannot drift: there is nothing a
-            # client can send. Derived, not declared — a new server-only table (an
-            # audit log, a queue, an ETL watermark) costs nobody a line of config.
-            if not record.has_write_surface and not record.schema_classes:
+            # THE ENTITY CONTRACT APPLIES TO MODELS A CLIENT CAN WRITE TO.
+            #
+            # No write schemas means no client write surface, which means nothing can
+            # drift: there is no request whose fields could disagree with the table.
+            # An audit log, a queue, an ETL watermark — and equally a READ-ONLY
+            # projection with nothing but a Response schema — have no contract to
+            # break.
+            #
+            # This is DERIVED, not declared. A new server-only table costs nobody a
+            # line of config, which is the only reason people keep adding tables (and
+            # keep running the checker).
+            #
+            # The first draft got this wrong: it skipped only models with NO schemas at
+            # all, so a model with a lone Response schema was still held to the write
+            # rules — and duly reported that "no write schema accepts `x`" for every
+            # column it had. On a real codebase that was 165 findings, every one of
+            # them noise, on four read-only projections. Nothing teaches people to
+            # ignore a linter faster.
+            if not record.has_write_surface:
                 continue
             if record.name in config.classifications:
                 continue  # deliberately, and explainedly, out of scope
@@ -130,6 +152,7 @@ class SqlAlchemyPydanticProvider:
                 "could not scan the schema modules for duplicates",
                 detail=traceback.format_exc(limit=6),
             )
+
 
         # The route table is the AUTHORITATIVE list of what a client can write —
         # the only place the non-conventional writers (`UpdateTierRequest` ->

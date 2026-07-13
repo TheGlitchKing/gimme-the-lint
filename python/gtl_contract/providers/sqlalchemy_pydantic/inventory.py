@@ -96,7 +96,9 @@ def schema_classes_in(module: Any) -> dict[str, Any]:
     }
 
 
-def iter_schema_modules(packages: tuple[str, ...]) -> Iterator[tuple[str, Any]]:
+def iter_schema_modules(
+    packages: tuple[str, ...], failures: list[ImportFailure] | None = None
+) -> Iterator[tuple[str, Any]]:
     """Every module in the configured packages that defines schema classes.
 
     NOT just `schemas/`. Real applications keep write schemas next to the routes
@@ -104,17 +106,20 @@ def iter_schema_modules(packages: tuple[str, ...]) -> Iterator[tuple[str, Any]]:
     under-report — precisely the failure mode it exists to prevent. So the caller
     configures every package worth scanning, routers included.
 
-    Import errors PROPAGATE. They are not skipped, and the temptation to skip them
-    ("one bad module shouldn't blind us to the others") is exactly backwards: a
-    schema module that fails to import takes its Create/Update classes with it, so
-    the model those schemas belonged to now appears to have no client write surface
-    at all. It is then classified INTERNAL and silently dropped from the check.
+    A submodule that will not import is RECORDED, not swallowed. The temptation to
+    swallow it ("one bad module shouldn't blind us to the others") is exactly
+    backwards: a schema module that fails to import takes its Create/Update classes
+    with it, so the model those schemas belonged to now appears to have no client
+    write surface at all. It is then classified INTERNAL and silently dropped.
 
-    An unimportable module does not cost us one module. It costs us an entity, and
-    it costs us the entity WITHOUT SAYING SO.
+    An unimportable module does not cost us one module. It costs us an entity — and
+    it costs us the entity WITHOUT SAYING SO. Hence the record: say what you could
+    not see.
     """
+    sink = failures if failures is not None else []
+
     for pkg_name in packages:
-        pkg = importlib.import_module(pkg_name)
+        pkg = importlib.import_module(pkg_name)  # a configured package must import
 
         # A plain module (not a package) is scannable on its own.
         if not hasattr(pkg, "__path__"):
@@ -124,30 +129,66 @@ def iter_schema_modules(packages: tuple[str, ...]) -> Iterator[tuple[str, Any]]:
 
         for mod_info in sorted(pkgutil.iter_modules(pkg.__path__), key=lambda m: m.name):
             full = f"{pkg_name}.{mod_info.name}"
-            module = importlib.import_module(full)
+            try:
+                module = importlib.import_module(full)
+            except Exception as e:
+                sink.append(ImportFailure(module=full, error=f"{type(e).__name__}: {e}"))
+                continue
             if schema_classes_in(module):
                 yield full.replace(".", "/") + ".py", module
 
 
-def _import_all(package_name: str) -> list[Any]:
-    """Import a package and every module directly under it. Errors PROPAGATE.
+@dataclass(frozen=True)
+class ImportFailure:
+    """A module we could not import — and therefore could not check."""
 
-    Swallowing an import error here is not a robustness feature, it is a blind spot
-    with a friendly face: the models in the module that failed simply cease to
-    exist, the inventory reports fewer tables than the app has, and every contract
-    bug in them goes unmentioned. The caller cannot tell the difference between "you
-    have no such model" and "I could not see your model", which is the one
-    distinction that matters.
+    module: str
+    error: str
+
+
+def _import_all(package_name: str, failures: list[ImportFailure]) -> list[Any]:
+    """Import a package and every module directly under it.
+
+    Two failure modes, deliberately treated differently:
+
+    * The CONFIGURED PACKAGE itself will not import (`app.models` is not there, or
+      blows up at import). Fatal — it propagates, and the provider turns it into a
+      skip. There is nothing to check and no partial answer worth giving.
+
+    * A SUBMODULE will not import. Recorded and reported as a violation, and the scan
+      CONTINUES.
+
+    The second case was originally fatal too, and that was wrong in a way only a real
+    codebase could show. The first app I pointed this at had a dead
+    backward-compat shim in models/ — re-exporting a class renamed away years ago,
+    imported by nothing, rotting quietly. Aborting the entire contract check because
+    of it would mean the tool cannot run until you fix a file unrelated to contracts,
+    which is precisely the "linter finds a thousand problems on day one" disease this
+    whole product exists to cure.
+
+    But silently skipping it is not an option either: whatever models live in that
+    module are INVISIBLE to us, so their contract goes unchecked — and would go
+    unchecked without anyone knowing. So the blind spot is given a name and reported.
+    Say what you could not see; check everything else.
     """
-    modules = [importlib.import_module(package_name)]
+    modules = [importlib.import_module(package_name)]  # fatal if this fails
     pkg = modules[0]
-    if hasattr(pkg, "__path__"):
-        for mod_info in sorted(pkgutil.iter_modules(pkg.__path__), key=lambda m: m.name):
-            modules.append(importlib.import_module(f"{package_name}.{mod_info.name}"))
+    if not hasattr(pkg, "__path__"):
+        return modules
+
+    for mod_info in sorted(pkgutil.iter_modules(pkg.__path__), key=lambda m: m.name):
+        full = f"{package_name}.{mod_info.name}"
+        try:
+            modules.append(importlib.import_module(full))
+        except Exception as e:
+            failures.append(ImportFailure(module=full, error=f"{type(e).__name__}: {e}"))
+
     return modules
 
 
-def _mapped_classes(model_packages: tuple[str, ...]) -> dict[str, Any]:
+def _mapped_classes(
+    model_packages: tuple[str, ...], failures: list[ImportFailure]
+) -> dict[str, Any]:
     """Every mapped class, from every registry we can reach.
 
     Importing the model packages is what POPULATES the registry — a mapper registry
@@ -161,13 +202,22 @@ def _mapped_classes(model_packages: tuple[str, ...]) -> dict[str, Any]:
     """
     modules: list[Any] = []
     for pkg_name in model_packages:
-        modules.extend(_import_all(pkg_name))
+        modules.extend(_import_all(pkg_name, failures))
 
-    registries = set()
+    # Match on the real type, not on a duck.
+    #
+    # The first draft duck-typed this — "anything with a .registry that has .mappers"
+    # — and it matched `sqlalchemy.func`, whose `_FunctionGenerator` happily answers
+    # to any attribute you ask it for. Iterating it exploded. Duck typing against a
+    # library built on __getattr__ magic is guessing, and a wrong guess here means
+    # either a crash or, far worse, a registry we never noticed.
+    from sqlalchemy.orm import registry as sa_registry
+
+    registries: set = set()
     for module in modules:
         for obj in vars(module).values():
             reg = getattr(obj, "registry", None)
-            if reg is not None and hasattr(reg, "mappers"):
+            if isinstance(reg, sa_registry):
                 registries.add(reg)
 
     found: dict[str, Any] = {}
@@ -178,17 +228,29 @@ def _mapped_classes(model_packages: tuple[str, ...]) -> dict[str, Any]:
     return found
 
 
-def build(model_packages: tuple[str, ...], schema_packages: tuple[str, ...]) -> list[ModelRecord]:
-    """The inventory. THE spine — nothing gets to be invisible."""
+def build(
+    model_packages: tuple[str, ...],
+    schema_packages: tuple[str, ...],
+    failures: list[ImportFailure] | None = None,
+) -> list[ModelRecord]:
+    """The inventory. THE spine — nothing gets to be invisible.
+
+    `failures` collects the modules we could not import. They are NOT silently
+    dropped: the caller turns each one into a violation, because a module we cannot
+    read is a set of models we cannot check, and that must never be indistinguishable
+    from a set of models with nothing wrong.
+    """
     from sqlalchemy import inspect as sa_inspect
 
-    models = _mapped_classes(model_packages)
+    sink = failures if failures is not None else []
+
+    models = _mapped_classes(model_packages, sink)
     known = set(models)
 
     # model name -> (home module path, {schema class name: class})
     by_model: dict[str, tuple[str, dict[str, Any]]] = {}
 
-    for path, module in iter_schema_modules(schema_packages):
+    for path, module in iter_schema_modules(schema_packages, sink):
         for cls_name, cls in schema_classes_in(module).items():
             for suffix in SCHEMA_SUFFIXES:
                 if not cls_name.endswith(suffix):

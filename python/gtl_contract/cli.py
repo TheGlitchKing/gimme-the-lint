@@ -21,12 +21,43 @@ on it makes us unparseable — and an unparseable linter is a silently absent on
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
 
 from . import config as config_mod
 from . import providers, rules
+
+
+@contextlib.contextmanager
+def quarantined_stdout():
+    """Redirect fd 1 to stderr while the application is being imported.
+
+    We import somebody else's app, and applications talk. The first real codebase
+    this ran against configured structlog at import time and wrote a JSON log line
+    ("CORS configured for development...") straight to stdout — landing our report on
+    line 2 and making the whole thing unparseable. The engine would have seen a
+    linter that produced garbage, and a linter that produces garbage is a linter that
+    is silently absent.
+
+    We cannot control what an app prints when imported, so we isolate it instead. The
+    redirect is at the FILE DESCRIPTOR level, not merely `sys.stdout`: a C extension
+    (or anything that grabbed fd 1 before we did) writes to the descriptor directly
+    and would sail straight past a Python-level swap.
+
+    Their output is not discarded — it goes to stderr, where a human debugging a skip
+    can still read it. It just does not get to sit on the wire.
+    """
+    sys.stdout.flush()
+    saved = os.dup(1)
+    try:
+        os.dup2(2, 1)  # fd 1 -> stderr, for the duration
+        yield
+    finally:
+        sys.stdout.flush()
+        os.dup2(saved, 1)  # give the real stdout back
+        os.close(saved)
 
 
 def _emit(payload: dict) -> None:
@@ -59,7 +90,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         )
         return 1
 
-    result = provider.check(root, cfg)
+    # Everything the app might print at import happens inside here, and lands on
+    # stderr. Our report is written after, to a stdout nobody else has touched.
+    with quarantined_stdout():
+        result = provider.check(root, cfg)
 
     _emit(
         {
