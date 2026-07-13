@@ -218,6 +218,85 @@ test.describe('codegen-stale is a DEFECT — it can never be grandfathered', () 
   });
 });
 
+test.describe('the rule catalogue and the adapter agree', () => {
+  // `gtl-contract rules` is the documented answer to "why does this rule exist?" — what a
+  // person reads before disabling a rule that just blocked their push. A catalogue that
+  // omits a rule sends that person away empty-handed, and they disable it on a guess.
+  //
+  // But a catalogue in Python and an emitter in JS is two sources of truth, and they will
+  // drift. They already did once, in the other direction: openapi.js inferred
+  // `neverBaseline` by rule-id exclusion and silently promoted two DEBT rules to defects.
+  //
+  // So the catalogue is the authority, and this test pins the adapter to it.
+  const { execSync } = require('child_process');
+
+  function catalogue() {
+    const bin = path.join(__dirname, '..', 'python', '.venv', 'bin', 'gtl-contract');
+    if (!fs.existsSync(bin)) return null;
+    const out = execSync(`${bin} rules`, { encoding: 'utf8' });
+    return Object.fromEntries(JSON.parse(out).rules.map((r) => [r.id, r]));
+  }
+
+  test('both codegen rules are IN the catalogue', () => {
+    const rules = catalogue();
+    if (!rules) return; // no venv here; the Python suite covers this
+
+    assert.ok(rules['contract/codegen-stale'], 'codegen-stale must be documented');
+    assert.ok(rules['contract/codegen-missing'], 'codegen-missing must be documented');
+  });
+
+  test('every codegen rule carries the incident it stands on', () => {
+    const rules = catalogue();
+    if (!rules) return;
+
+    for (const id of ['contract/codegen-stale', 'contract/codegen-missing']) {
+      assert.ok(
+        rules[id].incident.length > 60,
+        `${id} must record WHY it exists — a rule with no reason is a rule people delete`
+      );
+    }
+  });
+
+  test('the ADAPTER emits exactly what the CATALOGUE promises', {
+    skip: !HAVE_GENERATOR,
+  }, () => {
+    // THE PIN, and it is the whole point of this block.
+    //
+    // If somebody flips `neverBaseline` in codegen-drift.js without updating the catalogue
+    // — or updates the catalogue without touching the adapter — then the docs and the
+    // behavior part company. And the docs are what a person trusts when deciding whether
+    // they are ALLOWED to baseline something. A catalogue that says "debt" over an adapter
+    // that blocks the push is worse than no catalogue.
+    //
+    // So: run the adapter for real, and check every flag it emits against the catalogue.
+    const rules = catalogue();
+    if (!rules) return;
+
+    // codegen-missing: no output file yet.
+    const missingDir = repo();
+    // codegen-stale: types exist, then the lockfile moves out from under them.
+    const staleDir = repo();
+    generateInto(staleDir);
+    const lock = path.join(staleDir, 'openapi.json');
+    fs.writeFileSync(lock, fs.readFileSync(lock, 'utf8').replace(/zip_code/g, 'zip'));
+
+    const emitted = [...adapter(missingDir).lint(), ...adapter(staleDir).lint()];
+
+    assert.strictEqual(emitted.length, 2, 'expected one of each');
+
+    for (const v of emitted) {
+      const documented = rules[v.ruleId];
+      assert.ok(documented, `${v.ruleId} is emitted but NOT in the catalogue`);
+      assert.strictEqual(
+        v.neverBaseline,
+        documented.neverBaseline,
+        `${v.ruleId}: the adapter says neverBaseline=${v.neverBaseline}, the catalogue ` +
+          `says ${documented.neverBaseline}. One of them is lying to somebody.`
+      );
+    }
+  });
+});
+
 test.describe('normalize: whitespace noise is not a contract change', () => {
   const { normalize } = require('../lib/adapters/codegen-drift');
 

@@ -172,6 +172,14 @@ def test_the_defect_set_is_what_we_think_it_is():
         # than no spec: clients are generated from it and agreements made on it, and
         # all of it is now fiction.
         "contract/spec-implementation-mismatch",
+        # A stale generated client type is not a GAP — it is a lie the compiler is
+        # currently believing. A renamed field reads as `undefined`, which renders as
+        # nothing, which looks exactly like data that was never saved. That is how a
+        # blank ZIP field survived a full release cycle in front of users.
+        #
+        # (Emitted by the Node adapter, catalogued here. tests/codegen-drift.test.js
+        # pins the adapter's flag to this entry so the two cannot drift apart.)
+        "contract/codegen-stale",
     }
 
 

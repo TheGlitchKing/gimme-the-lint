@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1] - 2026-07-13
+
+### Fixed
+
+- **The rule catalogue was incomplete.** `contract/codegen-stale` and
+  `contract/codegen-missing` are emitted by the Node adapter, so they were never
+  registered in `gtl-contract rules` — the command the docs point at, and the thing a
+  person reads before disabling a rule that just blocked their push. A catalogue that omits
+  a rule sends that person away empty-handed, and they disable it on a guess. Found by
+  installing the published 2.7.0 tarball and asking it to list its own rules.
+
+  Both are catalogued now, with the incident each stands on. And because a catalogue in
+  Python over an emitter in JS is two sources of truth, `tests/codegen-drift.test.js` runs
+  the adapter for real and asserts every flag it emits matches the catalogue — so they
+  cannot drift apart. (They already did once, in the other direction: `openapi.js` inferred
+  `neverBaseline` by rule-id exclusion and silently promoted two debt rules to defects.)
+
 ## [2.7.0] - 2026-07-13
 
 **Drift lives wherever two artifacts must _agree_. It cannot exist where one is

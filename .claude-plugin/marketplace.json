@@ -12,7 +12,7 @@
     {
       "name": "gimme-the-lint",
       "description": "Polyglot progressive linting AND entity-contract checking — does your data model agree with the schemas that expose it? ESLint, Biome, Ruff, golangci-lint, Clippy, tflint, ansible-lint, squawk, buf, spectral, plus SQLAlchemy/Pydantic contract drift.",
-      "version": "2.7.0",
+      "version": "2.7.1",
       "author": {
         "name": "TheGlitchKing"
       },

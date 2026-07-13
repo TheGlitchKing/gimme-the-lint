@@ -235,6 +235,43 @@ UNSTABLE_OPERATION_ID = _r(
     "FastAPI(generate_unique_id_function=lambda route: route.name).",
 )
 
+# --- generated client types ------------------------------------------------------
+#
+# These two are EMITTED by the Node adapter (lib/adapters/codegen-drift.js), not by this
+# package — codegen-drift reads a committed JSON file and runs a JS generator, and never
+# imports the app.
+#
+# They are catalogued HERE anyway, and that is deliberate. `gtl-contract rules` is the
+# documented answer to "why does this rule exist?" — the thing a person reads before
+# disabling a rule that just blocked their push. A catalogue that omits two rules is a
+# catalogue that sends that person away empty-handed, and they will disable the rule on a
+# guess.
+#
+# tests/codegen-drift.test.js pins the adapter's `neverBaseline` to these entries, so the
+# two cannot drift apart. (They already did once, in the other direction: openapi.js
+# inferred the flag by rule-id exclusion and silently promoted two debt rules to defects.)
+
+CODEGEN_STALE = _r(
+    "contract/codegen-stale",
+    "The committed client types no longer match the API they are typed against.",
+    "A component read `prospect.zip`; the API returns `zip_code`. The backend was correct, "
+    "the contract check was green, the lockfile was fresh, the database row was right — and "
+    "the user saw a BLANK ZIP FIELD for a full release cycle, because `undefined` renders "
+    "as nothing, and nothing looks exactly like data that was never saved. "
+    "A stale generated type is not a gap. It is a lie the compiler is currently believing.",
+    never_baseline=True,
+)
+
+CODEGEN_MISSING = _r(
+    "contract/codegen-missing",
+    "A generator is configured for the client types, but the output has never been written.",
+    "Debt on purpose: every repo starts without generated types, and a check you must "
+    "repair your repo to install is a check nobody installs. Until it is written, the "
+    "frontend is typed by hand against an API it cannot see — which is how a hand-written "
+    "`TaskFormData` came to declare `estimated_hours`, a field that has never existed, one "
+    "word away from the real `estimated_cost`.",
+)
+
 SPEC_IMPLEMENTATION_MISMATCH = _r(
     "contract/spec-implementation-mismatch",
     "A hand-authored API spec that no longer describes what the code serves.",
@@ -268,6 +305,8 @@ ALL_RULES: tuple[Rule, ...] = (
     SPEC_IMPLEMENTATION_MISMATCH,
     ROUTE_WITHOUT_RESPONSE_MODEL,
     UNSTABLE_OPERATION_ID,
+    CODEGEN_STALE,
+    CODEGEN_MISSING,
 )
 
 BY_ID: dict[str, Rule] = {r.id: r for r in ALL_RULES}
