@@ -90,7 +90,11 @@ test.describe('defaults: every pre-existing adapter is unchanged', () => {
       .filter((a) => a.tier !== TIER.LOCAL || a.stage !== STAGE.COMMIT)
       .map((a) => `${a.id}:${a.tier}/${a.stage}`);
 
-    assert.deepStrictEqual(nonDefault, ['contract:local/push', 'openapi:local/push']);
+    assert.deepStrictEqual(nonDefault, [
+      'contract:local/push',
+      'openapi:local/push',
+      'alembic-check:external/ci',
+    ]);
   });
 });
 

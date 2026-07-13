@@ -19,6 +19,16 @@ inputs:
     description: 'Fail when a linter is missing for code that is present'
     required: false
     default: 'false'
+  verify:
+    description: >
+      Also run the checks that need a live database or network (e.g. alembic-check:
+      "you changed a model and forgot to generate a migration"). These can never run
+      in a git hook — a pre-commit hook that dials a database fails on an aeroplane —
+      so CI is the only place they belong, and the only place credentials legitimately
+      live. Supply them as env/secrets on the job; gimme-the-lint reads the
+      environment and never a committed config.
+    required: false
+    default: 'false'
   node-version:
     description: 'Node.js version'
     required: false
@@ -72,6 +82,11 @@ runs:
         [ "${{ inputs.fix }}" = "true" ] && ARGS="$ARGS --fix"
         [ "${{ inputs.strict }}" = "true" ] && ARGS="$ARGS --strict"
 
+        # CI is the one place the slower whole-app checks belong: it is not somebody's
+        # keyboard, and a few seconds here costs nobody their flow. The commit hook
+        # stays fast; the push hook runs these; CI runs them again against the merge.
+        ARGS="$ARGS --stage=push"
+
         EXIT=0
         npx --yes @theglitchking/gimme-the-lint check $ARGS \
           2>&1 | tee /tmp/gimme-lint-output.log || EXIT=${PIPESTATUS[0]}
@@ -86,6 +101,16 @@ runs:
           echo "status=fail" >> $GITHUB_OUTPUT
           exit 1
         fi
+
+    # The database-touching checks. A separate step, deliberately: if it fails, the
+    # log says "your models and your migrations disagree" rather than burying it among
+    # lint output — and a red build tells you which KIND of thing broke before you
+    # open it.
+    - name: Verify (database / network checks)
+      if: inputs.verify == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npx --yes @theglitchking/gimme-the-lint verify
 
     - name: Comment on PR
       if: always() && inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'

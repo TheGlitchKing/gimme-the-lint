@@ -305,6 +305,35 @@ program
   });
 
 program
+  .command('verify')
+  .description('Run the checks that need a database or network (CI only — never a git hook)')
+  .option('--offline', 'Air-gapped: fail rather than silently skip external checks')
+  .action(async (opts) => {
+    const chalk = require('chalk');
+    const { runVerify } = require('../lib/verify');
+    const { formatCheckReport } = require('../lib/report');
+
+    // Deliberately its own command rather than a flag on `check`. A flag can be
+    // passed by accident, and an invariant that depends on nobody passing a flag is
+    // not an invariant. `check` is a git hook and must stay hermetic; this is where
+    // the database-touching checks live, in CI, where credentials legitimately do.
+    try {
+      const report = await runVerify(process.cwd(), { offline: opts.offline });
+      console.log(formatCheckReport(report));
+      process.exit(report.ok ? 0 : 1);
+    } catch (err) {
+      if (err.code === 'OFFLINE_EXTERNAL') {
+        // Fail closed. A silent skip here would let a CI job go green having verified
+        // nothing at all — a provisioning bug, wearing the costume of a passing build.
+        console.error(chalk.red(`\n✗ ${err.message}\n`));
+        process.exit(1);
+      }
+      console.error(chalk.red(`\n✗ ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
   .command('materialize')
   .description('Write down the API contract your code computes at runtime (openapi.json)')
   .action(async () => {
