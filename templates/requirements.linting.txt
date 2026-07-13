@@ -5,6 +5,23 @@
 ruff>=0.9.0
 mypy>=1.15.0
 
+# The entity-contract checker: does your persistence model agree with the schemas
+# that expose it?
+#
+# Installed from the VENDORED source inside the npm package, not from PyPI. Two
+# reasons, and both matter:
+#
+#   * `--offline` is a real, supported mode for air-gapped and regulated
+#     environments. A PyPI dependency would force every such user to provision
+#     gtl-contract into their image by hand. Vendored, it is already on disk.
+#
+#   * The checker and the adapter that speaks to it share a JSON wire format. Ship
+#     them as one artifact and they cannot drift apart — there is no version to
+#     skew, no protocol to negotiate, and no "works on my machine" to debug.
+#
+# The path is rewritten at install time to point at the real node_modules location.
+-e ./node_modules/@theglitchking/gimme-the-lint/python
+
 # Testing (for pre-push validation)
 pytest>=9.0.0
 pytest-asyncio>=1.0.0

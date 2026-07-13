@@ -55,15 +55,42 @@ function stub({ id, tier, stage }) {
 }
 
 test.describe('defaults: every pre-existing adapter is unchanged', () => {
-  test('all 7 shipped adapters are local-tier, commit-stage', () => {
-    // The whole release rests on this: existing users must feel nothing. If an
-    // adapter silently acquired a non-default tier or stage, it would either stop
-    // running on commit or start demanding a network.
-    for (const id of adapters.listAdapters()) {
+  // The seven adapters that existed before the contract engine. Named explicitly
+  // rather than derived from the registry, because the whole point is to detect a
+  // change to THESE — a list computed from the registry would silently absorb one.
+  const PRE_EXISTING = [
+    'eslint',
+    'biome',
+    'ruff',
+    'golangci-lint',
+    'clippy',
+    'tflint',
+    'ansible-lint',
+  ];
+
+  test('all 7 pre-existing adapters are still local-tier, commit-stage', () => {
+    // The release rests on this: an existing user must feel nothing. If one of these
+    // silently acquired a non-default tier or stage, it would either stop running on
+    // commit (a check that vanishes) or start demanding a network (an air-gapped
+    // install that breaks). Both are silent.
+    for (const id of PRE_EXISTING) {
       const a = adapters.getAdapter(id, { projectRoot: '/tmp', appRoot: '/tmp' });
-      assert.strictEqual(a.tier, TIER.LOCAL, `${id} must default to local tier`);
-      assert.strictEqual(a.stage, STAGE.COMMIT, `${id} must default to commit stage`);
+      assert.strictEqual(a.tier, TIER.LOCAL, `${id} must still be local tier`);
+      assert.strictEqual(a.stage, STAGE.COMMIT, `${id} must still be commit stage`);
     }
+  });
+
+  test('a new adapter that opts out of the defaults is doing so DELIBERATELY', () => {
+    // `contract` is the first adapter to leave the defaults. This test exists so
+    // that the next one to do so cannot happen by accident: if an adapter appears
+    // here, someone chose it, and this list is where they say so.
+    const nonDefault = adapters
+      .listAdapters()
+      .map((id) => adapters.getAdapter(id, { projectRoot: '/tmp', appRoot: '/tmp' }))
+      .filter((a) => a.tier !== TIER.LOCAL || a.stage !== STAGE.COMMIT)
+      .map((a) => `${a.id}:${a.tier}/${a.stage}`);
+
+    assert.deepStrictEqual(nonDefault, ['contract:local/push']);
   });
 });
 
