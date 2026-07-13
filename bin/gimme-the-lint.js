@@ -139,6 +139,15 @@ program
   .option('--fix', 'Auto-fix violations where the linter supports it')
   .option('--all', 'Lint the entire codebase, not just staged changes')
   .option('--strict', 'Fail when a linter is missing for code that is present')
+  .option(
+    '--stage <stage>',
+    'Which checks to run: "commit" (fast, default) or "push" (adds slower whole-app checks)',
+    'commit'
+  )
+  .option(
+    '--no-stale-baseline',
+    'Fail if the baseline grandfathers violations that no longer occur'
+  )
   .action(async (opts) => {
     const chalk = require('chalk');
     const { runCheck } = require('../lib/check');
@@ -148,6 +157,9 @@ program
         fix: opts.fix,
         changedOnly: !opts.all,
         strict: opts.strict,
+        stage: opts.stage,
+        // commander maps `--no-stale-baseline` to staleBaseline === false
+        noStaleBaseline: opts.staleBaseline === false,
       });
       console.log(formatCheckReport(report));
       process.exit(report.ok ? 0 : 1);
@@ -390,9 +402,30 @@ program
     console.log(`  Git repo:      ${hookStatus.gitRepo ? chalk.green('yes') : chalk.red('no')}`);
     if (hookStatus.gitRepo) {
       for (const [hook, status] of Object.entries(hookStatus.hooks)) {
-        const color = status === 'installed' ? chalk.green : status === 'other' ? chalk.yellow : chalk.red;
+        const color =
+          status === 'installed'
+            ? chalk.green
+            : status === 'stale' || status === 'other'
+              ? chalk.yellow
+              : chalk.red;
         console.log(`    ${hook}: ${color(status)}`);
       }
+    }
+    // A stale hook still passes, still looks installed, and quietly runs fewer
+    // checks than the engine now provides. Say so loudly — a silent under-check
+    // is indistinguishable from a clean bill of health.
+    if (hookStatus.stale && hookStatus.stale.length) {
+      console.log('');
+      console.log(
+        chalk.yellow(
+          `⚠ ${hookStatus.stale.join(' and ')} hook(s) are from an older version of ` +
+            'gimme-the-lint.'
+        )
+      );
+      console.log(
+        chalk.yellow('  They still run, but will NOT run the checks added in this release.')
+      );
+      console.log(chalk.blue('  Fix: gimme-the-lint hooks'));
     }
     console.log('');
   });

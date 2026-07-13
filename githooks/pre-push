@@ -2,6 +2,14 @@
 # gimme-the-lint: Pre-Push Hook
 # Runs full codebase lint before push (more thorough than pre-commit)
 # Bypass: git push --no-verify
+#
+# gtl-hook-contract: 2
+#
+# Contract 2 (v2.6.0): passes --stage=push, which runs everything pre-commit runs
+# PLUS the whole-app checks that are too slow to sit on every commit — the entity
+# contract check has to import your application to see the model/schema agreement,
+# which costs seconds. Seconds are fine once per push; they are not fine on every
+# commit, and a slow commit hook is a hook people turn off.
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 
@@ -11,7 +19,7 @@ if [ -f "${PROJECT_ROOT}/node_modules/@theglitchking/gimme-the-lint/scripts/run-
 elif [ -f "${PROJECT_ROOT}/node_modules/gimme-the-lint/scripts/run-checks.sh" ]; then
     SCRIPT="${PROJECT_ROOT}/node_modules/gimme-the-lint/scripts/run-checks.sh"
 elif command -v gimme-the-lint &>/dev/null; then
-    GIMME_PROJECT_ROOT="$PROJECT_ROOT" gimme-the-lint check --all
+    GIMME_PROJECT_ROOT="$PROJECT_ROOT" gimme-the-lint check --all --stage=push
     exit $?
 fi
 
@@ -20,20 +28,20 @@ if [ -z "$SCRIPT" ]; then
     exit 0
 fi
 
-echo "Running pre-push checks (gimme-the-lint --all)..."
+echo "Running pre-push checks (gimme-the-lint --all --stage=push)..."
 echo ""
 
 export GIMME_PROJECT_ROOT="$PROJECT_ROOT"
 
-if bash "$SCRIPT" --all; then
+# Remediation guidance is printed by `check`, not here — see the note in
+# githooks/pre-commit for why.
+if bash "$SCRIPT" --all --stage=push; then
     echo ""
     echo "Pre-push checks passed!"
     exit 0
 else
     echo ""
-    echo "Pre-push checks failed. Fix violations before pushing."
-    echo "  gimme-the-lint check --fix --all"
-    echo ""
     echo "  Bypass: git push --no-verify"
+    echo ""
     exit 1
 fi
