@@ -1,7 +1,7 @@
 {
   "name": "@theglitchking/gimme-the-lint",
-  "version": "2.5.2",
-  "description": "Polyglot progressive linting for monorepos — adapter-driven baselines, per-app drift detection, and idempotent skips. Supports JavaScript/TypeScript (ESLint, Biome), Python (Ruff), Go (golangci-lint), Rust (Clippy), Terraform/OpenTofu (tflint), and Ansible (ansible-lint).",
+  "version": "2.6.0",
+  "description": "Polyglot progressive linting AND entity-contract checking for monorepos — does your data model agree with the schemas that expose it? Adapter-driven baselines, per-app drift detection. JavaScript/TypeScript (ESLint, Biome), Python (Ruff), Go (golangci-lint), Rust (Clippy), Terraform/OpenTofu (tflint), Ansible (ansible-lint), SQL migrations (squawk), Protobuf (buf), OpenAPI (spectral), plus SQLAlchemy/Pydantic contract drift.",
   "keywords": [
     "linting",
     "progressive-linting",
@@ -25,7 +25,18 @@
     "terraform",
     "opentofu",
     "ansible-lint",
-    "ansible"
+    "ansible",
+    "schema-drift",
+    "contract-testing",
+    "sqlalchemy",
+    "pydantic",
+    "fastapi",
+    "openapi",
+    "alembic",
+    "squawk",
+    "buf",
+    "protobuf",
+    "api-contract"
   ],
   "author": {
     "name": "TheGlitchKing",

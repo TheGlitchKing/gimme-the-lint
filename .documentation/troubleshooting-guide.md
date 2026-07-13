@@ -132,3 +132,15 @@ violations.
 ## Reset everything
 
 Delete `.gtl/` and run `gimme-the-lint baseline` to rebuild from scratch.
+
+---
+
+## Contract checks won't run?
+
+The entity-contract check imports your application, which gives it its own failure modes
+(a missing env var, a model that connects at import, a venv that isn't there). They are
+all recoverable, and they all resolve to a loud skip that never blocks.
+
+See [`contract-troubleshooting-guide.md`](contract-troubleshooting-guide.md).
+
+**The rule that governs all of them:** a skip means **UNCHECKED**, not **CLEAN**.

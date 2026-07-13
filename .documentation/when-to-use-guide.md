@@ -52,3 +52,22 @@ by your image. It fails loudly if a linter is missing for code that is present.
 - **CI** — the GitHub Action runs the same engine and comments on the PR.
 - **Claude Code** — `/lint`, `/lint:status`, `/lint:baseline`, and the
   linting agent.
+
+---
+
+## When NOT to use the contract checks
+
+The contract engine (v2.6) is for applications with a **persistence model and transport
+schemas** — today, SQLAlchemy + Pydantic (FastAPI).
+
+You do not need it if:
+
+- You have no ORM. A Go service, a Rust CLI, a Terraform repo — the check binds nothing
+  and stays silent. Nothing changes for you.
+- Your models have no client write surface. A model with no `Create`/`Update` schema
+  cannot drift: there is no request whose fields could disagree with the table. This is
+  **derived**, not declared — a new server-only table (an audit log, a queue) costs you
+  zero configuration.
+
+The check is opt-in in the honest sense: install `gtl-contract` and it runs; don't, and
+it warn-skips.

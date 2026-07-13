@@ -5,6 +5,152 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-07-13
+
+The engine has always asked *"is this code well-formed?"*. It now also asks **"does your
+data model agree with the schemas that expose it?"** — on the same only-new-violations-block
+terms, with one deliberate exception.
+
+### ⚠ Upgrading: one thing you must do
+
+**Re-run `gimme-the-lint hooks`.** Git hooks are installed *files*; `npm update` cannot
+rewrite one you installed months ago, and a stale hook will silently never run the new
+checks. `status` and `dashboard` now warn when your hooks predate the engine.
+
+Everything else is additive. **Your baselines are safe** — a violation with no
+`fingerprintKey` hashes exactly as it did in 2.5.2, asserted against literal digests, and
+verified by baselining a project with the real 2.5.2 binary and reading it back with this
+one: zero new violations, baseline file byte-identical.
+
+The full error catalog is in
+[`.documentation/upgrade-guide.md`](.documentation/upgrade-guide.md), inline rather than
+by reference — when a push is blocked and the error gets pasted into a chat window, a link
+is a dead end.
+
+### Added — the entity contract
+
+`gtl-contract`, a Python checker shipped inside the npm package (`python/`). The first
+linter gimme-the-lint **authors** rather than wraps, because no third-party tool checks
+whether a SQLAlchemy model agrees with the Pydantic schemas exposing it.
+
+Seventeen rules, **each standing on a production bug it would have caught**:
+
+- **A user filled in twelve fields on a form and four were saved.** The API returned 201.
+  `PropertyCreate` declared 17 of 37 columns; `extra='ignore'` dropped the rest.
+  → `contract/column-not-writable`
+- **Clicking Save reset every approved budget line item to `pending` and wiped its notes.**
+  The user changed nothing. An update schema carried `status = "pending"`, and an update
+  schema is applied *over* a stored row — so the default overwrote what was there. **It
+  returned 200.** → `contract/update-has-create-default`
+- **Every conversation returned a 500 on GET and PUT, forever.** `metadata` is reserved on
+  every SQLAlchemy model — `Base.metadata` *is* the MetaData registry — so a response
+  field of that name read the registry instead of a column.
+  → `contract/reserved-metadata-unaliased`
+- **A JSON column typed `str` in the response.** Harmless until the first *correct* value
+  was written, then every read 500'd and the whole page went down.
+  → `contract/response-type-mismatch`
+- **Four entities nobody knew were entities**, because their schemas lived in `routers/`
+  rather than `schemas/` and a scan of the obvious place missed them.
+  → `contract/unregistered-write-surface`
+
+It **imports your application** rather than parsing it, because the authoritative list of
+what a client can write lives in the route table, not in the filenames.
+`UpdateTierRequest` writes `organizations.tier` and is called nothing of the sort — a
+name-based scan reports that table as having no write surface and moves on. **A scan whose
+miss is invisible to itself is worse than no scan, because it is believed.**
+
+Runs on **push**, not commit: importing an app costs seconds, and a three-second
+pre-commit hook is a hook people disable.
+
+### Added — defects cannot be grandfathered
+
+The one place this tool stops being progressive.
+
+**Debt** is a gap: the app works, it has a hole in it. Grandfather it — that is what
+progressive linting is *for*. **A defect is broken right now, for everyone.**
+Grandfathering one means writing down *"we accept that every read of this entity returns a
+500"*, and nobody would say that out loud, so the tool will not say it for them.
+
+The predicate is **not** "returns a 500". `update-has-create-default` returns a cheerful
+200 while destroying your data, which is worse — because a 500 is loud.
+
+Three independent gates, because this is the rule people will most want to work around:
+`baseline` will not capture it; the diff engine ignores a hand-planted hash; and
+`baseline` says what it refused, with the escape hatch. That hatch is real and
+deliberately expensive: except it in `.gtl/config.js`, **with a reason**.
+
+### Added — the API contract lockfile
+
+FastAPI computes an OpenAPI document from your schemas and serves it at `/openapi.json`.
+It is complete, correct, and **invisible to every tool that reads files** — so nothing
+stops a field rename from silently breaking every client.
+
+`gimme-the-lint materialize` writes it down. `check` then reports when the code and the
+lockfile part company (`contract/lockfile-stale`), which is what makes the whole thing
+trustworthy: without it, a stale lockfile asserts an API you no longer serve and the
+breaking-change check compares two identical stale files and finds nothing. **The guard
+goes inert and still shows green.**
+
+A **hand-authored** spec is never overwritten. The emitted document carries
+`x-generated-by`; a file without that marker is yours, and `materialize` refuses it byte
+for byte. When an authored spec and the code disagree, that disagreement is itself the
+finding (`contract/spec-implementation-mismatch`) — and neither file is touched.
+
+### Added — `verify`, and the external tier
+
+`alembic check` catches the migration you forgot to generate. Your tests pass because the
+test database is built from the **models**; production is built from the **migrations**.
+
+It needs a live database, so it is `external` tier — **structurally** unreachable from
+`check`, which is a git hook and must stay hermetic. It runs only from
+`gimme-the-lint verify`, in CI. No combination of flags can talk `check` into running one,
+and under `--offline`, `verify` **fails** rather than skipping: a silent skip would let a
+CI job go green having verified nothing.
+
+### Added — more linters
+
+- **`squawk`** — migration *safety*. `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT ''` is
+  fine on your laptop and takes an ACCESS EXCLUSIVE lock on forty million rows in
+  production. Nothing about the SQL is malformed, so a syntax linter has nothing to say.
+- **`buf`** + **`buf-breaking`** — protobuf lint and breaking-change detection. Two
+  registry entries over one binary, so lint debt and breakage baseline *independently*.
+- **`spectral`** — OpenAPI/AsyncAPI lint, for hand-authored specs.
+
+### Added — engine
+
+- **`fingerprintKey`** — optional, file-independent violation identity. A schema that
+  moves to another file keeps its baseline; a message that enumerates a changing set
+  ("no write schema accepts [a, b]" → "[a, b, c]") stops re-reporting known problems as new.
+- **`tier`** (`local`/`reference`/`external`) and **`stage`** (`commit`/`push`/`ci`) on the
+  adapter contract. Orthogonal: a `local` adapter can still be too slow for a commit hook.
+- **`--stage`**, defaulting to `commit` — a safety property, not a preference. A stale hook
+  degrades to *"the new check doesn't fire yet"* (loud, one command to fix), never to
+  *"your commits got slow"* (silent, and fixed by uninstalling).
+- **Stale baseline entries are reported.** The engine has always computed which baselined
+  violations no longer occur and always thrown them away; surfacing them is what makes a
+  baseline a ratchet that only shrinks. Informational — failing is opt-in via
+  `--no-stale-baseline`.
+
+### Changed
+
+- **Remediation guidance now derives from the adapters that actually failed.** The hooks
+  used to print *"For LLMs: AUTOMATICALLY run `--fix`"* unconditionally. For a rule with no
+  autofix that is a dead end — and the next lever an agent reaches for is `baseline`, which
+  does not fix the defect, it **grandfathers** it, and then reports success. Non-fixable
+  failures now say so, and explicitly forbid both `--fix` and `baseline`.
+- A baseline section's `total` counts violations **grandfathered**, not violations *found*.
+  With a refused defect in play those differ, and the baseline was reporting "15 baselined"
+  next to a file holding 10.
+- `verify` no longer tells users with no external checks to "run baseline", and the report
+  says what actually happens next ("Verified." rather than "Safe to commit." when you are
+  three hours past the commit).
+
+### Fixed
+
+- **The npm tarball shipped the Python test suite** — including deliberately-broken
+  SQLAlchemy fixtures — into every consumer's `node_modules`. `.npmignore` does not help:
+  `files` is an allowlist and overrides it.
+
 ## [2.5.2] - 2026-05-21
 
 ### Changed

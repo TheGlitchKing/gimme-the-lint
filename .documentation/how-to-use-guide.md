@@ -110,3 +110,23 @@ than 30 days. Run `gimme-the-lint baseline` to refresh.
 `/lint` runs a check, `/lint:status` shows the dashboard, `/lint:baseline`
 refreshes baselines. When a commit is blocked, the hook output instructs Claude
 Code to run `check --fix`, re-stage, and retry automatically.
+
+---
+
+## v2.6: the contract commands
+
+```bash
+gimme-the-lint check --stage=push   # + the whole-app contract checks
+gimme-the-lint materialize          # write down the API contract (openapi.json)
+gimme-the-lint verify               # checks needing a database — CI only, never a hook
+```
+
+**Why `--stage`:** the contract check imports your application (seconds). That is fine
+once per push and intolerable on every commit — a slow commit hook is a hook people
+disable. `pre-commit` runs `--stage=commit`; `pre-push` runs `--stage=push`.
+
+**If you upgraded from v2.5, re-run `gimme-the-lint hooks`** — old hook files pass no
+`--stage`, so the new checks silently never fire.
+
+See [`contract-guide.md`](contract-guide.md) and
+[`upgrade-guide.md`](upgrade-guide.md).
