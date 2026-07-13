@@ -80,10 +80,22 @@ test.describe('defaults: every pre-existing adapter is unchanged', () => {
     }
   });
 
-  test('a new adapter that opts out of the defaults is doing so DELIBERATELY', () => {
-    // `contract` is the first adapter to leave the defaults. This test exists so
-    // that the next one to do so cannot happen by accident: if an adapter appears
-    // here, someone chose it, and this list is where they say so.
+  test('every adapter that opts out of the defaults is doing so DELIBERATELY', () => {
+    // A pin, not a description. Leaving the defaults means an adapter either stops
+    // running on commit or starts demanding something the environment may not have —
+    // and both of those are SILENT. If an adapter appears in this list, someone chose
+    // it on purpose, and this is where they say so.
+    //
+    //   contract      push   imports the whole app (seconds). A 3s commit hook is a
+    //                        hook people disable, and a disabled hook guards nothing.
+    //   openapi       push   same import, same reason.
+    //   alembic-check ci     needs a LIVE DATABASE. A pre-commit hook that dials a
+    //                        database fails on an aeroplane. Structurally unreachable
+    //                        from any hook; runs only in `verify`.
+    //   buf-breaking  push   needs git HISTORY. On a feature branch you may break the
+    //                        schema in commit 3 and fix it in commit 7 — blocking
+    //                        commit 3 is pedantry. What must not happen is the branch
+    //                        REACHING the base still broken.
     const nonDefault = adapters
       .listAdapters()
       .map((id) => adapters.getAdapter(id, { projectRoot: '/tmp', appRoot: '/tmp' }))
@@ -94,6 +106,7 @@ test.describe('defaults: every pre-existing adapter is unchanged', () => {
       'contract:local/push',
       'openapi:local/push',
       'alembic-check:external/ci',
+      'buf-breaking:reference/push',
     ]);
   });
 });
