@@ -106,9 +106,33 @@ expose it?**
 |-------|------|---------|
 | `contract` | Does every column your model has actually reach a client — and come back? | **push** |
 | `openapi` | Does your published API contract still describe what your code serves? | **push** |
+| `codegen-drift` | Do your frontend's types still match the API they're typed against? | commit |
 | `squawk` | Will this migration take a table-locking hold on production? | commit |
 | `buf-breaking` | Did this commit break somebody's protobuf client? | push |
 | `alembic-check` | Did you change a model and forget to generate a migration? | **CI only** |
+
+### The whole chain, guarded
+
+```
+   Postgres columns
+        ⇕   alembic-check
+   SQLAlchemy models
+        ⇕   17 contract rules
+   Pydantic schemas
+        ↓   materialize → openapi.json
+   openapi.json
+        ↓   openapi-typescript → api-types.ts
+   frontend types
+```
+
+**Drift lives wherever two artifacts must _agree_. It cannot exist where one is
+_derived_.** So the bottom two rungs are derived, and the class of bug that lived there is
+now inexpressible rather than merely tested-for.
+
+The bug that motivated it: a component read `prospect.zip`; the API returns `zip_code`.
+Backend correct, contract check green, lockfile fresh, database row right — and a user saw
+a blank field for a full release cycle, because `undefined` renders as nothing, and
+nothing looks exactly like data that was never saved.
 
 Seventeen contract rules, **each one standing on a specific production bug** — the
 incident is recorded with the rule and printed by `gtl-contract rules`. A rule whose
@@ -125,7 +149,7 @@ baseline it, fix it at your own pace. A response field that 500s every read is a
 accept that this endpoint is broken."* You can still except it — in config, with a
 mandatory reason. The friction is the feature.
 
-Start with [`.documentation/contract-guide.md`](.documentation/contract-guide.md).
+Start with [`.documentation/api/contract-guide.md`](.documentation/api/contract-guide.md).
 
 ## Shipped lint configs
 
@@ -155,7 +179,7 @@ To go stricter, pull the lever in the table above — because violations are
 progressively baselined, raising strictness never blocks existing code, only new
 code is held to the higher bar. Full per-codebase detail — every default rule
 and how to adjust it — is in
-[`.documentation/lint-rules-guide.md`](.documentation/lint-rules-guide.md).
+[`.documentation/standards/lint-rules-guide.md`](.documentation/standards/lint-rules-guide.md).
 
 ---
 
@@ -222,7 +246,7 @@ git add -A && git commit -m "…" # retry
 | `gimme-the-lint uninstall` | Remove hooks and config |
 
 > **Upgrading from v2.5?** Re-run `gimme-the-lint hooks`, or the new checks silently
-> never fire. See [`.documentation/upgrade-guide.md`](.documentation/upgrade-guide.md)
+> never fire. See [`.documentation/procedures/upgrade-guide.md`](.documentation/procedures/upgrade-guide.md)
 > — it carries the full error catalog.
 
 ---

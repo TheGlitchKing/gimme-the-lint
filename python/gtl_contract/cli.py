@@ -178,6 +178,7 @@ def cmd_openapi(args: argparse.Namespace) -> int:
                     "gimme-the-lint materialize"
                 ),
                 "fingerprintKey": "openapi:lockfile-missing",
+                "neverBaseline": rules.BY_ID["contract/lockfile-missing"].never_baseline,
                 "source": "contract",
             }
         )
@@ -201,6 +202,7 @@ def cmd_openapi(args: argparse.Namespace) -> int:
                         "file has been touched — fix whichever one is wrong."
                     ),
                     "fingerprintKey": "openapi:spec-implementation-mismatch",
+                    "neverBaseline": rules.BY_ID["contract/spec-implementation-mismatch"].never_baseline,
                     "source": "contract",
                 }
             )
@@ -218,7 +220,37 @@ def cmd_openapi(args: argparse.Namespace) -> int:
                     "files and finding nothing wrong. Run: gimme-the-lint materialize"
                 ),
                 "fingerprintKey": "openapi:lockfile-stale",
+                    "neverBaseline": rules.BY_ID["contract/lockfile-stale"].never_baseline,
                 "source": "contract",
+            }
+        )
+
+    # SPEC QUALITY — and this is not a footnote.
+    #
+    # A lockfile can be perfectly fresh and still be worthless. A route with no
+    # response_model emits an EMPTY response schema, so a code generator types the whole
+    # endpoint `any` and the client compiles against a shape nobody has ever checked. You
+    # can have a green lockfile, a green codegen check, and no idea what a quarter of your
+    # API returns.
+    #
+    # A perfect lockfile over an incomplete spec is a perfect record of a lie.
+    for finding in openapi_mod.spec_quality(document):
+        violations.append(
+            {
+                "file": args.lockfile or "openapi.json",
+                "line": 0,
+                "ruleId": finding["rule"],
+                "severity": "error",
+                "message": finding["message"],
+                # Identity is the ROUTE, not the file or the message: every one of these
+                # findings lives in the same lockfile, so a file-keyed identity would
+                # collapse 65 distinct routes into one.
+                "fingerprintKey": finding["key"],
+                # DEBT, and it must be. 65 of 244 routes on the first real codebase — if
+                # this could not be grandfathered, adopting the tool would mean fixing 65
+                # routes before your next commit, and nobody does that; they uninstall.
+                "neverBaseline": rules.BY_ID[finding["rule"]].never_baseline,
+                "source": "openapi",
             }
         )
 

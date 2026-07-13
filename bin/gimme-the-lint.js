@@ -353,7 +353,14 @@ program
     console.log(chalk.blue('\ngimme-the-lint: materialize\n'));
 
     for (const unit of resolveUnits(root)) {
-      for (const linterId of unit.linters) {
+      // REGISTRY ORDER, not the unit's (sorted) linter list.
+      //
+      // Derivation is a chain: the lockfile is derived from the app, and the client types
+      // are derived from the lockfile. Run them alphabetically — `codegen-drift` sorts
+      // before `openapi` — and we would generate the types from YESTERDAY's lockfile,
+      // then overwrite the lockfile, and report success. The command whose entire job is
+      // to make the types fresh would be the thing that staled them.
+      for (const linterId of adapters.materializeOrder(unit.linters)) {
         let adapter;
         try {
           adapter = adapters.getAdapter(linterId, {

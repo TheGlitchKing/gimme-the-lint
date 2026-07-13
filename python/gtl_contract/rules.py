@@ -213,6 +213,28 @@ LOCKFILE_STALE = _r(
     never_baseline=True,
 )
 
+ROUTE_WITHOUT_RESPONSE_MODEL = _r(
+    "openapi/route-without-response-model",
+    "A route that declares no response_model, so its response schema is EMPTY.",
+    "65 of 244 routes on the first real codebase. FastAPI cannot infer a response schema "
+    "from a function that does not declare one, so it emits an empty one — and the spec "
+    "then lies by omission for 27% of the API. Everything downstream inherits the lie: a "
+    "code generator has nothing to work from and types the whole endpoint `any`, so the "
+    "generated client compiles happily against a shape nobody has ever checked. "
+    "A perfect lockfile over an incomplete spec is a perfect record of a lie.",
+)
+
+UNSTABLE_OPERATION_ID = _r(
+    "openapi/unstable-operation-id",
+    "A route relying on FastAPI's auto-derived operationId.",
+    "244 of 244 routes on the first real codebase. FastAPI derives operationId from the "
+    "function name, the path and the method — so RENAMING A PYTHON HANDLER silently "
+    "renames every generated client method that calls it. A pure refactor, touching no "
+    "API surface, ships as a breaking change to every consumer. "
+    "One line at app construction fixes it repo-wide: "
+    "FastAPI(generate_unique_id_function=lambda route: route.name).",
+)
+
 SPEC_IMPLEMENTATION_MISMATCH = _r(
     "contract/spec-implementation-mismatch",
     "A hand-authored API spec that no longer describes what the code serves.",
@@ -244,6 +266,8 @@ ALL_RULES: tuple[Rule, ...] = (
     LOCKFILE_MISSING,
     LOCKFILE_STALE,
     SPEC_IMPLEMENTATION_MISMATCH,
+    ROUTE_WITHOUT_RESPONSE_MODEL,
+    UNSTABLE_OPERATION_ID,
 )
 
 BY_ID: dict[str, Rule] = {r.id: r for r in ALL_RULES}

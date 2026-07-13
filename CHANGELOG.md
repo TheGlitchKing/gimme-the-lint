@@ -5,6 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-07-13
+
+**Drift lives wherever two artifacts must _agree_. It cannot exist where one is
+_derived_.** v2.6.0 guarded every rung of the chain where two things must agree, and none
+of the rungs where one is derived — so the truth reached the edge of Python and was then
+handed to a human to retype into TypeScript.
+
+```
+   Postgres columns
+        ⇕   alembic-check                       v2.6.0
+   SQLAlchemy models
+        ⇕   17 contract rules                   v2.6.0
+   Pydantic schemas
+        ↓   materialize → openapi.json          v2.6.0
+   openapi.json
+        ↓   openapi-typescript → api-types.ts   v2.7.0  ← this
+   frontend types
+```
+
+Closes #11.
+
+### Added — `codegen-drift`
+
+Your frontend's types, generated from the API they are typed against — and checked.
+
+**The bug it exists for:** a component read `prospect.zip`. The API returns `zip_code`.
+The backend was correct, the contract check was green, the lockfile was fresh, the
+database row was right — and **the user saw a blank ZIP field for a full release cycle**,
+because `undefined` renders as nothing, and nothing looks exactly like *"the data was
+never saved."*
+
+**And a worse one:** a hand-written `TaskFormData` declared `estimated_hours` — no such
+column; the real one is `estimated_cost`, **one word away** — and `dependencies`, which
+does not exist either, while omitting `notes`, `deal_id`, `estimated_cost` and
+`is_recurring`, which all do. Wrong in both directions at once.
+
+The v2.6.0 contract check reports **zero violations** on that model. The backend is
+correct and always was. **The lie was entirely in the hand-written mirror**, and every
+guard we shipped passed it, because the lie was not in Python. Both bugs were found by a
+human clicking around in a browser.
+
+With generated types, the first is a compile error and the second is a sentence the
+compiler will not let you write.
+
+- **`contract/codegen-stale`** — a **defect**, never baselineable. A stale generated type
+  is not a *gap*; it is **a lie the compiler is currently believing**.
+- **`contract/codegen-missing`** — debt. Every repo starts without generated types, and a
+  check you must repair your repo to install is a check nobody installs.
+
+Opt-in twice over (a generator **and** an output path). A hand-written types file is
+**never overwritten** — the generator signs its own output, and a file without that
+signature is yours. `check` still reports where it disagrees with your API; it just will
+not touch it.
+
+### Added — spec quality, because otherwise the guard is green over nothing
+
+A lockfile can be perfectly fresh and completely worthless.
+
+- **`openapi/route-without-response-model`** (debt) — FastAPI cannot infer a response
+  schema from a function that does not declare one, so it emits an **empty** one. A
+  generator then types the whole endpoint `any`, and your client compiles against a shape
+  **nobody has ever checked**. **48 of 243 routes** on the first real codebase.
+- **`openapi/unstable-operation-id`** (debt) — generators turn `operationId` into the
+  client *method name*, and FastAPI derives `operationId` from the **function name**. So
+  renaming a handler — a pure refactor, touching no API — silently renames every generated
+  client method, and ships as a breaking change to every consumer. **243 of 243 routes.**
+  One line at app construction fixes it repo-wide.
+
+**A perfect lockfile over an incomplete spec is a perfect record of a lie.**
+
+### Fixed
+
+- **`neverBaseline` was inferred by exclusion**, and it was a time bomb. `openapi.js`
+  guessed from the rule id — *"everything except `lockfile-missing` is a defect"* — which
+  is correct for exactly as long as there are two rules. The moment two more arrived, both
+  were silently promoted to **defects**, and `route-without-response-model` fires 48 times
+  on a real codebase: adoption would have meant fixing 48 routes before your next commit,
+  and nobody does that. They uninstall. The provider now **declares** it; the engine does
+  not get a vote. **Rules belong to the linter that defines them.**
+- **`materialize` would have generated from yesterday's lockfile.** A unit's `linters`
+  array is sorted, and alphabetically `codegen-drift` sorts *before* `openapi` — so the
+  client types would have been generated from the old lockfile, the lockfile then
+  overwritten, and success reported. The types would have been stale the instant they were
+  written, by the very command whose job is to make them fresh. `materialize` now runs in
+  **registry order**, which encodes the derivation chain.
+
+### Changed
+
+- `schema-lockfile-guide.md` used to end with a shell command and a shrug — telling you to
+  run `openapi-typescript` by hand and hoping you remembered. Nothing failed if you did
+  not. **The tool owns that step now.**
+
 ## [2.6.0] - 2026-07-13
 
 The engine has always asked *"is this code well-formed?"*. It now also asks **"does your
