@@ -25,8 +25,10 @@ import contextlib
 import json
 import os
 import sys
+import traceback
 
 from . import config as config_mod
+from . import openapi as openapi_mod
 from . import providers, rules
 
 
@@ -107,6 +109,123 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0 if result.checked else 1
 
 
+def cmd_openapi(args: argparse.Namespace) -> int:
+    """Emit the API contract that otherwise exists only at runtime.
+
+    Two modes, and the difference matters enormously:
+
+      --emit     print the document. The engine writes it where it belongs.
+      (default)  COMPARE the live document against the committed lockfile, and report
+                 a violation if they disagree.
+
+    That comparison is what makes the whole lockfile trustworthy. Without it a
+    developer renames a Pydantic field, never regenerates, and the committed lockfile
+    goes on asserting the old shape forever — so the breaking-change check downstream
+    is comparing two identical stale files and cheerfully reporting no breakage. The
+    guard goes inert and still shows green. It is `npm ci` refusing a stale
+    package-lock.json, and for exactly the same reason.
+    """
+    root = os.path.abspath(args.root)
+    cfg = config_mod.load(args.config)
+
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+    app_ref = cfg.app or args.app
+    if not app_ref:
+        _emit({"checked": False, "violations": [], "skip": "no app configured (contract.app)"})
+        return 1
+
+    try:
+        with quarantined_stdout():
+            document = openapi_mod.materialize(app_ref)
+    except Exception:
+        _emit(
+            {
+                "checked": False,
+                "violations": [],
+                "skip": f"could not materialize the OpenAPI document from {app_ref}",
+                "detail": traceback.format_exc(limit=6),
+            }
+        )
+        return 1
+
+    if args.emit:
+        sys.stdout.write(openapi_mod.serialize(document))
+        return 0
+
+    # Compare against the committed lockfile.
+    committed = None
+    if args.lockfile and os.path.exists(args.lockfile):
+        try:
+            with open(args.lockfile, "r", encoding="utf-8") as fh:
+                committed = json.load(fh)
+        except Exception:
+            committed = None
+
+    violations = []
+
+    if committed is None:
+        violations.append(
+            {
+                "file": args.lockfile or "openapi.json",
+                "line": 0,
+                "ruleId": "contract/lockfile-missing",
+                "severity": "error",
+                "message": (
+                    "No API contract lockfile. Your API's shape exists only at runtime, so "
+                    "nothing can tell you when a change breaks a client. Run: "
+                    "gimme-the-lint materialize"
+                ),
+                "fingerprintKey": "openapi:lockfile-missing",
+                "source": "contract",
+            }
+        )
+    elif not openapi_mod.is_generated(committed):
+        # A hand-authored spec. It is the source of truth, not our output — we do not
+        # own it and will never rewrite it. But if the code now serves something
+        # DIFFERENT from what the spec promises, that disagreement is the single most
+        # valuable thing we can report: a published contract that has quietly stopped
+        # describing the implementation.
+        if openapi_mod.differs(committed, document):
+            violations.append(
+                {
+                    "file": args.lockfile,
+                    "line": 0,
+                    "ruleId": "contract/spec-implementation-mismatch",
+                    "severity": "error",
+                    "message": (
+                        f"{args.lockfile} is hand-authored (it carries no generated-by marker), "
+                        "and the API your code actually serves no longer matches it. The "
+                        "published contract and the implementation have drifted apart. Neither "
+                        "file has been touched — fix whichever one is wrong."
+                    ),
+                    "fingerprintKey": "openapi:spec-implementation-mismatch",
+                    "source": "contract",
+                }
+            )
+    elif openapi_mod.differs(committed, document):
+        violations.append(
+            {
+                "file": args.lockfile,
+                "line": 0,
+                "ruleId": "contract/lockfile-stale",
+                "severity": "error",
+                "message": (
+                    "The API contract lockfile no longer matches the code. You changed a "
+                    "schema without regenerating it, so the lockfile is asserting an API you "
+                    "no longer serve — and the breaking-change check is comparing two stale "
+                    "files and finding nothing wrong. Run: gimme-the-lint materialize"
+                ),
+                "fingerprintKey": "openapi:lockfile-stale",
+                "source": "contract",
+            }
+        )
+
+    _emit({"checked": True, "provider": "openapi", "violations": violations, "skip": None})
+    return 0
+
+
 def cmd_rules(args: argparse.Namespace) -> int:
     """Dump the rule catalogue.
 
@@ -143,6 +262,18 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--config", default=None, help="Path to the JSON config")
     check.add_argument("--provider", default=None, help="Force a provider")
     check.set_defaults(func=cmd_check)
+
+    api = sub.add_parser("openapi", help="Materialize or verify the API contract lockfile")
+    api.add_argument("--root", default=".", help="Project root (default: cwd)")
+    api.add_argument("--config", default=None, help="Path to the JSON config")
+    api.add_argument("--app", default=None, help='ASGI app ref, e.g. "app.main:app"')
+    api.add_argument("--lockfile", default=None, help="Path to the committed lockfile")
+    api.add_argument(
+        "--emit",
+        action="store_true",
+        help="Print the document instead of comparing it (used by `materialize`)",
+    )
+    api.set_defaults(func=cmd_openapi)
 
     rules_cmd = sub.add_parser("rules", help="Print the rule catalogue as JSON")
     rules_cmd.set_defaults(func=cmd_rules)

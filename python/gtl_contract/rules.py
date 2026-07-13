@@ -179,8 +179,49 @@ EXCEPTION_WITHOUT_REASON = _r(
 STALE_EXCEPTION = _r(
     "contract/stale-exception",
     "An exception naming a model or column that no longer exists.",
-    "A lie left behind by a deletion. It keeps a dead name alive and quietly "
-    "loosens the ratchet.",
+    "A lie left behind by a deletion. Found twice on the first real codebase: "
+    "`Deal.user_id` and `Property.user_id` were declared server-managed years after "
+    "the columns were removed. Not cosmetic — a dead declaration is a LIVE "
+    "EXEMPTION. The day someone re-adds a `user_id` column it arrives pre-exempted "
+    "from the contract and the guard stays quiet. It keeps a dead name alive and "
+    "quietly loosens the ratchet.",
+    never_baseline=True,
+)
+
+# --- the API contract lockfile ---------------------------------------------------
+
+LOCKFILE_MISSING = _r(
+    "contract/lockfile-missing",
+    "A code-first API with no materialized contract.",
+    "FastAPI computes an OpenAPI document from your schemas and serves it at "
+    "/openapi.json. It is complete, it is correct, and it is invisible to every tool "
+    "that reads files — so nothing stops a field rename from silently breaking every "
+    "client of that endpoint. There is no artifact to diff, so there is no diff, so "
+    "there is no warning. Write it down and it becomes a reviewable line in a PR "
+    "instead of a 4am page.",
+)
+
+LOCKFILE_STALE = _r(
+    "contract/lockfile-stale",
+    "The committed API contract no longer matches the code.",
+    "The inert-guard case, and the reason the lockfile is trustworthy at all. Change "
+    "a schema without regenerating, and the lockfile goes on asserting an API you no "
+    "longer serve — so the breaking-change check downstream compares two identical "
+    "stale files and cheerfully reports no breakage. The guard goes inert and still "
+    "shows green. This is `npm ci` refusing a stale package-lock.json, for exactly "
+    "the same reason.",
+    never_baseline=True,
+)
+
+SPEC_IMPLEMENTATION_MISMATCH = _r(
+    "contract/spec-implementation-mismatch",
+    "A hand-authored API spec that no longer describes what the code serves.",
+    "The declared-vs-actual problem, one level up from the database. A spec that has "
+    "quietly stopped matching the implementation is worse than no spec: clients are "
+    "generated from it, contracts are negotiated on it, and all of it is now fiction. "
+    "Neither file is overwritten — a hand-authored spec is the source of truth and is "
+    "never ours to rewrite — so the disagreement is reported and a human decides "
+    "which side is wrong.",
     never_baseline=True,
 )
 
@@ -200,6 +241,9 @@ ALL_RULES: tuple[Rule, ...] = (
     DUPLICATE_SCHEMA_CLASS_DRIFTED,
     EXCEPTION_WITHOUT_REASON,
     STALE_EXCEPTION,
+    LOCKFILE_MISSING,
+    LOCKFILE_STALE,
+    SPEC_IMPLEMENTATION_MISMATCH,
 )
 
 BY_ID: dict[str, Rule] = {r.id: r for r in ALL_RULES}

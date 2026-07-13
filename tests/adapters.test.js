@@ -41,7 +41,7 @@ describe('adapter registry', () => {
     // well-formed?", contract asks "does the model agree with the schemas exposing
     // it?". Both run, and they baseline independently.
     const py = adapters.adaptersForLanguage('python');
-    assert.deepStrictEqual(py.map((a) => a.id), ['ruff', 'contract']);
+    assert.deepStrictEqual(py.map((a) => a.id), ['ruff', 'contract', 'openapi']);
   });
 
   it('supports registering a custom adapter', () => {

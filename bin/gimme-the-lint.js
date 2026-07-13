@@ -305,6 +305,87 @@ program
   });
 
 program
+  .command('materialize')
+  .description('Write down the API contract your code computes at runtime (openapi.json)')
+  .action(async () => {
+    const chalk = require('chalk');
+    const fs = require('fs-extra');
+    const path = require('path');
+    const { resolveUnits } = require('../lib/units');
+    const adapters = require('../lib/adapters');
+
+    // The ONLY command that writes a lockfile into the working tree. `check` never
+    // does — a hook that edits your files behind your back is a hostile hook — and
+    // `baseline` has no business touching source. One command, one code path, so
+    // "what could have written this?" always has one answer.
+    const root = process.cwd();
+    let wrote = 0;
+
+    console.log(chalk.blue('\ngimme-the-lint: materialize\n'));
+
+    for (const unit of resolveUnits(root)) {
+      for (const linterId of unit.linters) {
+        let adapter;
+        try {
+          adapter = adapters.getAdapter(linterId, {
+            projectRoot: root,
+            appRoot: unit.root,
+          });
+        } catch {
+          continue;
+        }
+        if (!adapter.detect(unit.root) || !adapter.available()) continue;
+
+        let result;
+        try {
+          result = adapter.materialize();
+        } catch (err) {
+          console.log(`  ${chalk.red('✗')} ${unit.id} · ${linterId} — ${err.message}`);
+          continue;
+        }
+        if (!result) continue; // this adapter derives nothing. Most do not.
+
+        // Provenance: a file we did not write is somebody's hand-authored source of
+        // truth, and regenerating over it would destroy their work on a routine
+        // command. The adapter refuses; we report and move on.
+        if (result.skipped) {
+          console.log(`  ${chalk.yellow('·')} ${unit.id} · ${linterId}`);
+          console.log(chalk.yellow(`      ${result.skipped}`));
+          continue;
+        }
+
+        const existing = (await fs.pathExists(result.path))
+          ? await fs.readFile(result.path, 'utf8')
+          : null;
+
+        if (existing === result.content) {
+          console.log(
+            `  ${chalk.dim('·')} ${unit.id} · ${linterId} ${chalk.dim('— already current')}`
+          );
+          continue;
+        }
+
+        await fs.ensureDir(path.dirname(result.path));
+        await fs.writeFile(result.path, result.content);
+        wrote += 1;
+        console.log(
+          `  ${chalk.green('✓')} ${unit.id} · ${linterId} → ` +
+            chalk.cyan(path.relative(root, result.path))
+        );
+      }
+    }
+
+    console.log('');
+    if (wrote > 0) {
+      console.log(chalk.blue('Commit the lockfile — it is what makes a breaking API'));
+      console.log(chalk.blue('change visible in a pull request instead of in production.'));
+    } else {
+      console.log(chalk.dim('Nothing to write.'));
+    }
+    console.log('');
+  });
+
+program
   .command('dashboard')
   .description('Show the progressive linting dashboard (baselines + drift)')
   .action(async () => {

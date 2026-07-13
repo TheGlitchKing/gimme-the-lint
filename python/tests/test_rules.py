@@ -163,7 +163,26 @@ def test_the_defect_set_is_what_we_think_it_is():
         "contract/duplicate-schema-class-drifted",
         "contract/exception-without-reason",
         "contract/stale-exception",
+        # A stale lockfile asserts an API you no longer serve, so the breaking-change
+        # check downstream compares two identical stale files and cheerfully reports
+        # no breakage. Baselining it would switch the guard off permanently while
+        # leaving it green — the exact failure it exists to prevent.
+        "contract/lockfile-stale",
+        # A published spec that has stopped describing the implementation is worse
+        # than no spec: clients are generated from it and agreements made on it, and
+        # all of it is now fiction.
+        "contract/spec-implementation-mismatch",
     }
+
+
+def test_a_MISSING_lockfile_is_debt_so_the_tool_can_be_adopted():
+    """Every code-first project on earth starts without a lockfile.
+
+    If "you have no lockfile" could not be grandfathered, nobody could install this
+    without first materializing — and a linter you must repair your repo to install is
+    a linter nobody installs.
+    """
+    assert R.LOCKFILE_MISSING.never_baseline is False
 
 
 def test_every_rule_cites_the_bug_it_stands_on():
