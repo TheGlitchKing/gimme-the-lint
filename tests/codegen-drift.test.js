@@ -305,6 +305,19 @@ test.describe('against the real generator', { skip: !HAVE_GENERATOR }, () => {
     assert.strictEqual(violations[0].ruleId, 'contract/codegen-stale');
     assert.match(violations[0].message, /hand-written/);
 
+    // AND it must be un-baselineable, on THIS path too.
+    //
+    // Mutation testing found this gap: the acceptance test only exercises the *generated*
+    // branch, so flipping `neverBaseline` on the hand-written branch went completely
+    // unnoticed. The two paths produce the same rule and must carry the same weight — and
+    // this is the branch where it matters MOST, because a hand-written file that disagrees
+    // with the API is the exact case somebody would most like to baseline away.
+    assert.strictEqual(
+      violations[0].neverBaseline,
+      true,
+      'a hand-written file that lies about the API is still a defect'
+    );
+
     // materialize must REFUSE...
     const result = adapter(dir).materialize();
     assert.ok(result.skipped, 'it must refuse to generate over a human file');
