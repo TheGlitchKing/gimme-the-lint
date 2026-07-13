@@ -247,6 +247,69 @@ ours to rewrite. The disagreement is reported; you decide which side is wrong.
 
 ---
 
+### `contract/codegen-missing`
+
+A generator is configured for your client types, but the output has never been written.
+
+**Debt on purpose:** every repo starts here. **Fix:** `gimme-the-lint materialize`.
+
+---
+
+### `openapi/route-without-response-model`
+
+A route that declares no `response_model`, so its response schema is **empty**.
+
+> **48 of 243 routes** on the first real codebase. FastAPI cannot infer a response schema
+> from a function that does not declare one, so it emits an empty one — and everything
+> downstream inherits the lie. A code generator has nothing to work from and types the
+> whole endpoint `any`, so your client compiles happily against a shape **nobody has ever
+> checked**.
+
+You can have a fresh lockfile, a green codegen check, and no idea what a fifth of your API
+returns. **A perfect lockfile over an incomplete spec is a perfect record of a lie.**
+
+**Fix:** add `response_model=...` to the route (or a return annotation — FastAPI will use
+that too).
+
+---
+
+### `openapi/unstable-operation-id`
+
+A route relying on FastAPI's auto-derived `operationId`.
+
+> **243 of 243 routes** on the first real codebase. Generators turn `operationId` into the
+> client *method name*, and FastAPI derives `operationId` from the **function name**. So
+> renaming a Python handler — a pure refactor, touching no API surface — silently renames
+> every generated client method that calls it, and **ships as a breaking change to every
+> consumer**.
+
+**Fix — one line, repo-wide:**
+
+```python
+FastAPI(generate_unique_id_function=lambda route: route.name)
+```
+
+---
+
+## Defects — never baselineable (continued)
+
+### `contract/codegen-stale`
+
+The committed client types no longer match the lockfile.
+
+> **The bug:** a component read `prospect.zip`; the API returns `zip_code`. Backend
+> correct, contract check green, lockfile fresh, database row right — and the user saw a
+> **blank ZIP field for a full release cycle**, because `undefined` renders as nothing, and
+> nothing looks exactly like *"the data was never saved."*
+
+A stale generated type is not a *gap*. It is **a lie the compiler is currently believing**.
+
+**Fix:** `gimme-the-lint materialize`. If the file is hand-written, `materialize` will
+**refuse** to overwrite it — and that refusal is correct. See
+[`codegen-guide.md`](codegen-guide.md).
+
+---
+
 ## Migration rules
 
 ### `migration/model-not-migrated` (external tier — CI only)

@@ -1,7 +1,7 @@
 {
   "name": "@theglitchking/gimme-the-lint",
-  "version": "2.6.0",
-  "description": "Polyglot progressive linting AND entity-contract checking for monorepos — does your data model agree with the schemas that expose it? Adapter-driven baselines, per-app drift detection. JavaScript/TypeScript (ESLint, Biome), Python (Ruff), Go (golangci-lint), Rust (Clippy), Terraform/OpenTofu (tflint), Ansible (ansible-lint), SQL migrations (squawk), Protobuf (buf), OpenAPI (spectral), plus SQLAlchemy/Pydantic contract drift.",
+  "version": "2.7.0",
+  "description": "Polyglot progressive linting AND contract checking for monorepos — guards the whole chain: Postgres ⇄ SQLAlchemy models ⇄ Pydantic schemas → openapi.json → generated frontend types. Adapter-driven baselines, per-app drift detection. ESLint, Biome, Ruff, golangci-lint, Clippy, tflint, ansible-lint, squawk, buf, spectral, plus SQLAlchemy/Pydantic contract drift and generated-client-type drift.",
   "keywords": [
     "linting",
     "progressive-linting",
@@ -36,7 +36,11 @@
     "squawk",
     "buf",
     "protobuf",
-    "api-contract"
+    "api-contract",
+    "codegen",
+    "openapi-typescript",
+    "type-generation",
+    "client-types"
   ],
   "author": {
     "name": "TheGlitchKing",

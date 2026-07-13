@@ -25,6 +25,19 @@ guidance for whichever linter failed — **follow the output, not your memory.**
 If a defect blocks a push and the user wants it gone, the only honest options are: fix
 it, or declare it in `.gtl/config.js` **with a written reason**. Ask them which.
 
+### `contract/codegen-stale` has one correct action
+
+```bash
+gimme-the-lint materialize   # regenerates the client types from the lockfile
+```
+
+Then commit the regenerated file. Not `--fix`, not `baseline`.
+
+**If `materialize` REFUSES** — because the types file is hand-written and carries no
+generator banner — that refusal is **correct**. It is the user's file. **Do not delete it
+to make the check pass.** Tell them, and let them decide when to switch to generated
+types.
+
 ## Capabilities
 
 - Run `gimme-the-lint check` to lint changed files

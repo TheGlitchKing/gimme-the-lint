@@ -145,6 +145,45 @@ yours, and `materialize` will never overwrite it.
 
 ---
 
+### `contract/codegen-stale`  *(v2.7)*
+
+**Means:** your committed client types no longer match the API. **A defect** — the
+compiler is currently believing a lie, and a renamed field reads as `undefined`, which
+renders as nothing, which looks exactly like data that was never saved.
+
+**Do:** `gimme-the-lint materialize`, then commit the regenerated types.
+
+**Don't:** run `baseline` (it is a defect — it will not help). Don't run `--fix` (there is
+no autofix).
+
+**If the file is hand-written**, `materialize` will **refuse to overwrite it**. That
+refusal is correct — it is your file. Delete it when you are ready to generate, and
+`check` will keep telling you where it disagrees in the meantime.
+
+---
+
+### `contract/codegen-missing`  *(v2.7)*
+
+**Means:** a generator is configured but the output has never been written. **Debt.**
+
+**Do:** `gimme-the-lint materialize` — or `baseline` it, if you are not ready.
+
+---
+
+### `openapi/route-without-response-model` / `openapi/unstable-operation-id`  *(v2.7)*
+
+**Means:** your spec is incomplete, so anything generated *from* it is guarding less than
+it appears to. **Debt** — 48 findings on a real codebase, so they are baselineable and
+will not block your adoption.
+
+**Do:** baseline them, then fix at your own pace. `unstable-operation-id` is one line at
+app construction and fixes every route at once.
+
+**Don't:** ignore them forever. Until they are fixed, your generated client types the
+affected endpoints as `any`, and `codegen-drift` is green over nothing.
+
+---
+
 ### Your push got slower
 
 **Means:** expected. The entity-contract check imports your application (seconds), so

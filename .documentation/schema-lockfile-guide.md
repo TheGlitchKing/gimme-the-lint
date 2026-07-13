@@ -123,16 +123,36 @@ breakage. The guard goes inert and still shows green.
 
 ---
 
-## The downstream win
+## The downstream win — now owned by the tool
 
-Once `openapi.json` exists on disk, feed it to `openapi-typescript`:
+**This guide used to end here with a shell command and a shrug**, telling you to run
+`openapi-typescript` by hand and hoping you remembered. Nothing failed if you didn't. The
+tool knew this was the payoff and did not own it.
+
+It does now:
 
 ```bash
-npx openapi-typescript openapi.json -o frontend/src/api-types.ts
+gimme-the-lint materialize   # writes the lockfile AND regenerates your client types
 ```
 
-Your frontend's types are now **generated** from the same document your backend serves.
-Hand-mirrored types stop being a drift source — not *detected*, but **impossible**.
+Configure it once, alongside the rest of the `contract` block:
+
+```js
+contract: {
+  app: 'app.main:app',
+  lockfile: 'openapi.json',
+  codegen: [
+    { generator: 'openapi-typescript', output: 'frontend/src/api-types.ts' },
+  ],
+}
+```
+
+Now a stale client type is `contract/codegen-stale` — a **defect**, blocked, never
+baselineable. Your frontend's types are **generated** from the same document your backend
+serves, and hand-mirrored types stop being a drift source: not *detected*, but
+**impossible**.
+
+See [`codegen-guide.md`](codegen-guide.md).
 
 ---
 

@@ -11,4 +11,4 @@ apart. It knows nothing about baselines, fingerprints, or git — that is the en
 job. It is a linter, and its output is just violations.
 """
 
-__version__ = "2.6.0"
+__version__ = "2.7.0"
