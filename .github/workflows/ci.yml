@@ -89,7 +89,9 @@ jobs:
       # the broken-app test fixtures into every consumer's node_modules, and
       # .npmignore very nearly stripping the README that pyproject.toml declares
       # (which would have made `pip install` fail on every machine).
-      - run: npm pack --pack-destination /tmp/pkg
+      # `--pack-destination` does not create the directory; npm will happily write the
+      # tarball nowhere and then fail to find it.
+      - run: mkdir -p /tmp/pkg && npm pack --pack-destination /tmp/pkg
 
       - name: Extract and install exactly what a user would get
         run: |
