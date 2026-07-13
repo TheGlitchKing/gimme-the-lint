@@ -70,6 +70,38 @@ jobs:
       # The rules, each tested against the production bug it was written for.
       - run: pytest python/tests -q
 
+  docs:
+    name: The docs do not rot
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      # Same argument as every other check in this project: a guard that nobody runs is
+      # a guard that reports nothing. The docs carry the rules' reasons — the production
+      # incident each one stands on — and a rule whose reason has rotted is a rule
+      # somebody deletes in a hurry.
+      - name: Audit (frontmatter, placement, links)
+        run: npx --no hit-em-with-the-docs audit
+
+      - name: No broken links
+        run: npx --no hit-em-with-the-docs link-check
+
+      # The knowledge-base facts carry a `verify_command` — a command that PROVES the
+      # claim. A fact whose command no longer runs is not a fact; it is a rumour with
+      # frontmatter. So we run them.
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -e './python[dev]' pyyaml
+
+      - name: Every fact proves itself
+        run: python scripts/verify-facts.py
+
   package:
     name: The tarball actually installs
     runs-on: ubuntu-latest

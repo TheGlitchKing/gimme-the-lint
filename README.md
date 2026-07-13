@@ -149,7 +149,7 @@ baseline it, fix it at your own pace. A response field that 500s every read is a
 accept that this endpoint is broken."* You can still except it — in config, with a
 mandatory reason. The friction is the feature.
 
-Start with [`.documentation/contract-guide.md`](.documentation/contract-guide.md).
+Start with [`.documentation/api/contract-guide.md`](.documentation/api/contract-guide.md).
 
 ## Shipped lint configs
 
@@ -179,7 +179,7 @@ To go stricter, pull the lever in the table above — because violations are
 progressively baselined, raising strictness never blocks existing code, only new
 code is held to the higher bar. Full per-codebase detail — every default rule
 and how to adjust it — is in
-[`.documentation/lint-rules-guide.md`](.documentation/lint-rules-guide.md).
+[`.documentation/standards/lint-rules-guide.md`](.documentation/standards/lint-rules-guide.md).
 
 ---
 
@@ -246,7 +246,7 @@ git add -A && git commit -m "…" # retry
 | `gimme-the-lint uninstall` | Remove hooks and config |
 
 > **Upgrading from v2.5?** Re-run `gimme-the-lint hooks`, or the new checks silently
-> never fire. See [`.documentation/upgrade-guide.md`](.documentation/upgrade-guide.md)
+> never fire. See [`.documentation/procedures/upgrade-guide.md`](.documentation/procedures/upgrade-guide.md)
 > — it carries the full error catalog.
 
 ---
