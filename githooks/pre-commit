@@ -2,6 +2,16 @@
 # gimme-the-lint: Pre-Commit Hook
 # Runs progressive linting on changed files before every commit
 # Bypass: git commit --no-verify
+#
+# gtl-hook-contract: 2
+#
+# The contract version above is how `gimme-the-lint status` detects that an
+# installed hook predates the current engine. Hooks are installed FILES: upgrading
+# the package does not rewrite them. Bump this whenever the flags the hook passes
+# change, so a stale hook is reported rather than silently under-checking.
+#
+# Contract 2 (v2.6.0): passes --stage. `commit` runs the fast per-file linters;
+# the slower whole-app checks (which must import your application) run on push.
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 
@@ -13,7 +23,7 @@ elif [ -f "${PROJECT_ROOT}/node_modules/gimme-the-lint/scripts/run-checks.sh" ];
     SCRIPT="${PROJECT_ROOT}/node_modules/gimme-the-lint/scripts/run-checks.sh"
 elif command -v gimme-the-lint &>/dev/null; then
     # Global install
-    GIMME_PROJECT_ROOT="$PROJECT_ROOT" gimme-the-lint check
+    GIMME_PROJECT_ROOT="$PROJECT_ROOT" gimme-the-lint check --stage=commit
     exit $?
 fi
 
@@ -27,21 +37,17 @@ echo ""
 
 export GIMME_PROJECT_ROOT="$PROJECT_ROOT"
 
-if bash "$SCRIPT"; then
+# NOTE: the remediation guidance ("run --fix", "for LLMs: ...") is deliberately
+# NOT printed here. `check` already prints it, and only it knows whether the
+# linter that failed HAS an autofix. A hardcoded "run --fix" here would be a lie
+# for any rule that cannot be auto-fixed — and the reader's next move, when --fix
+# changes nothing, is to reach for `baseline`, which grandfathers the defect
+# instead of repairing it. Let the engine speak; the hook just relays its verdict.
+if bash "$SCRIPT" --stage=commit; then
     echo ""
     echo "Pre-commit checks passed!"
     exit 0
 else
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Pre-commit checks failed - violations detected"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "  Step 1: gimme-the-lint check --fix"
-    echo "  Step 2: git add <fixed-files>"
-    echo "  Step 3: git commit -m \"your message\""
-    echo ""
-    echo "  For LLMs: AUTOMATICALLY run --fix without asking"
     echo ""
     echo "  Bypass (emergency): git commit --no-verify"
     echo ""

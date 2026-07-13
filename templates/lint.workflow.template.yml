@@ -1,0 +1,59 @@
+# gimme-the-lint: Progressive Linting Workflow TEMPLATE
+#
+# Copy this to your repo as .github/workflows/lint.yml and adjust the inputs.
+#
+# It lives in templates/ rather than .github/workflows/ for a reason worth knowing:
+# GitHub Actions executes EVERY .yml under .github/workflows/, whatever it is called.
+# A file named "…template.yml" is not a template to GitHub — it is a workflow, and it
+# will run. This one did, in gimme-the-lint's own repo, on every PR for a year,
+# failing each time against an action tag that did not exist. Nobody noticed, because
+# a check that has always been red is a check nobody reads.
+
+name: Progressive Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write  # Required for PR comments
+
+jobs:
+  lint:
+    name: Progressive Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changed-file detection
+
+      # Pin a version you trust. `@v2` is a floating tag that moves with each 2.x
+      # release; `@v2.6.0` never moves. (Before v2.6.0 the floating tag did not exist
+      # at all, so every copy of this template failed with "unable to find version
+      # v2". If that is what brought you here: update the ref.)
+      - uses: TheGlitchKing/gimme-the-lint@v2.6.0
+        with:
+          mode: full              # 'full' = whole codebase; 'progressive' = staged changes
+          fix: false              # Set 'true' to auto-fix in CI
+          strict: false           # Set 'true' to fail when a linter is missing
+          verify: false           # Also run checks needing a live database (see below)
+          python-version: '3.13'  # For Ruff; blank to skip Python setup
+          node-version: '22'      # Node.js version
+          comment-on-pr: true     # Post results as a PR comment
+
+      # `verify: true` runs the external-tier checks — today, `alembic check`: "you
+      # changed a model and forgot to generate a migration". These need a live
+      # database, so they can NEVER run in a git hook (a pre-commit hook that dials a
+      # database fails on an aeroplane). CI is the only place they belong, and the
+      # only place credentials legitimately live. Supply them as job env/secrets:
+      #
+      #   env:
+      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Linters are auto-detected per app (JS/TS, Python, Go, Rust). Install
+      # the ones your repo uses in steps before this action, or rely on the
+      # toolchains the runner already provides.

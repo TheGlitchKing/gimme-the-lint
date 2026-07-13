@@ -37,8 +37,11 @@ describe('adapter registry', () => {
   it('finds adapters by language', () => {
     const js = adapters.adaptersForLanguage('javascript').map((a) => a.id);
     assert.ok(js.includes('eslint') && js.includes('biome'));
+    // Python has two, and they are not alternatives: ruff asks "is this code
+    // well-formed?", contract asks "does the model agree with the schemas exposing
+    // it?". Both run, and they baseline independently.
     const py = adapters.adaptersForLanguage('python');
-    assert.deepStrictEqual(py.map((a) => a.id), ['ruff']);
+    assert.deepStrictEqual(py.map((a) => a.id), ['ruff', 'contract', 'openapi', 'alembic-check']);
   });
 
   it('supports registering a custom adapter', () => {

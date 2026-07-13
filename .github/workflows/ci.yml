@@ -1,0 +1,119 @@
+# The repo's own CI.
+#
+# Until now there was none. The only file in this directory was
+# `lint.template.yml` — a TEMPLATE, meant to be copied into a user's repo — and
+# GitHub happily executed it as a live workflow anyway, because Actions runs every
+# .yml in .github/workflows/ regardless of what it is called. It referenced
+# `TheGlitchKing/gimme-the-lint@v2`, a tag that has never existed, so it failed on
+# every push and every PR for the entire v2 line.
+#
+# Nobody noticed, because a check that has always been red is a check nobody reads.
+# Which means this project — whose entire purpose is to stop guards from silently
+# not guarding — shipped for a year with a CI that never once ran its own tests.
+#
+# This runs them.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      # The engine: fingerprints, the diff engine, the baseline store, every
+      # adapter, and the invariants (tests/invariants.test.js) — the promises that
+      # must never break.
+      - run: npm run test:contract
+
+  python:
+    name: Python ${{ matrix.python }} — gtl-contract
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # gtl-contract declares no dependencies on purpose — it inspects the app's own
+      # SQLAlchemy and Pydantic. The dev extra supplies them so the fixtures can run.
+      - run: pip install -e './python[dev]'
+
+      # The rules, each tested against the production bug it was written for.
+      - run: pytest python/tests -q
+
+  package:
+    name: The tarball actually installs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      # The checker ships INSIDE the npm package and is pip-installed from the local
+      # path, so "it works in the repo" proves nothing about what users get. Pack it,
+      # extract it, install it, and run it — the way a user would.
+      #
+      # Two packaging bugs were caught exactly this way: `files: ["python/"]` shipping
+      # the broken-app test fixtures into every consumer's node_modules, and
+      # .npmignore very nearly stripping the README that pyproject.toml declares
+      # (which would have made `pip install` fail on every machine).
+      # `--pack-destination` does not create the directory; npm will happily write the
+      # tarball nowhere and then fail to find it.
+      - run: mkdir -p /tmp/pkg && npm pack --pack-destination /tmp/pkg
+
+      - name: Extract and install exactly what a user would get
+        run: |
+          tar -xzf /tmp/pkg/*.tgz -C /tmp/pkg
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install /tmp/pkg/package/python
+
+      - name: The shipped checker runs
+        run: |
+          /tmp/venv/bin/gtl-contract rules | python -c "
+          import json, sys
+          rules = json.load(sys.stdin)['rules']
+          assert len(rules) >= 17, f'expected the full rule catalogue, got {len(rules)}'
+          assert any(r['neverBaseline'] for r in rules), 'no defect rules shipped'
+          print(f'{len(rules)} rules shipped and callable')
+          "
+
+      - name: The tarball must not carry our test fixtures
+        run: |
+          if tar -tzf /tmp/pkg/*.tgz | grep -q 'python/tests'; then
+            echo "::error::The npm tarball is shipping the Python test suite — including"
+            echo "::error::deliberately-broken SQLAlchemy fixtures — into every consumer."
+            exit 1
+          fi
+          echo "clean: no test fixtures in the tarball"

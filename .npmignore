@@ -11,3 +11,12 @@ docs/
 .eslintrc*
 .prettierrc*
 node_modules/
+
+# The Python checker ships; its test fixtures do not. A user installing
+# gimme-the-lint has no use for our pytest suite, and the broken-app fixtures
+# are deliberately full of bugs — shipping them would put a dozen files
+# containing known-defective SQLAlchemy models into every consumer node_modules.
+python/tests/
+python/.venv/
+python/**/__pycache__/
+python/*.egg-info/

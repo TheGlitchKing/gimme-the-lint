@@ -16,10 +16,27 @@ do it. **gimme-the-lint** solves this by remembering the old problems and only
 blocking your work when you create a _new_ one. Your team cleans up the old
 stuff at its own pace; meanwhile no new mess gets in.
 
-**v2.0** generalizes that idea to any linter and any language. It is no longer
-"ESLint + Ruff for webapps" — it is a progressive-lint **engine** with a
-pluggable **linter adapter** for each tool, across **JavaScript/TypeScript, Python,
-Go, Rust, Terraform, and Ansible**, in **any monorepo shape**.
+**v2.0** generalized that idea to any linter and any language — a progressive-lint
+**engine** with a pluggable adapter per tool, across JavaScript/TypeScript, Python,
+Go, Rust, Terraform and Ansible, in any monorepo shape.
+
+**v2.6** applies the same bargain to a different question. Not *"is this code
+well-formed?"* but ***"does your data model agree with the schemas that expose it?"***
+
+Because that is where the expensive bugs live, and they are all silent:
+
+> A user fills in twelve fields. Four are saved. The API returns **201**.
+>
+> Nobody clicks Save on a project and expects every line item to be reset to
+> `pending` and its notes wiped. The endpoint returned **200**.
+>
+> A column is typed `str` in the response and `JSON` in the database. Harmless —
+> until the first *correct* value is written, and every read 500s.
+
+None of that is a lint error. Nothing is malformed, nothing crashes, and the response
+says success. **gimme-the-lint now catches it before it ships**, on the same
+"only-new-violations-block" terms as everything else — with one exception: a bug that is
+*already breaking production* is never grandfathered.
 
 ---
 
@@ -76,6 +93,39 @@ change in one app never churns the baselines of another.
 | Rust | `clippy` (`cargo clippy`) | `Cargo.toml` |
 | Terraform / OpenTofu | `tflint` | `*.tf` / `*.tofu` files (no manifest) |
 | Ansible | `ansible-lint` | `ansible.cfg`, `galaxy.yml` |
+| SQL migrations | `squawk` | a `migrations/` directory (any language) |
+| Protobuf | `buf`, `buf-breaking` | `*.proto` files |
+| OpenAPI / AsyncAPI | `spectral` | `openapi.yaml`, `asyncapi.yaml` |
+
+## Contract checks (v2.6)
+
+Beyond "is this code well-formed": **does your data model agree with the schemas that
+expose it?**
+
+| Check | Asks | Runs on |
+|-------|------|---------|
+| `contract` | Does every column your model has actually reach a client — and come back? | **push** |
+| `openapi` | Does your published API contract still describe what your code serves? | **push** |
+| `squawk` | Will this migration take a table-locking hold on production? | commit |
+| `buf-breaking` | Did this commit break somebody's protobuf client? | push |
+| `alembic-check` | Did you change a model and forget to generate a migration? | **CI only** |
+
+Seventeen contract rules, **each one standing on a specific production bug** — the
+incident is recorded with the rule and printed by `gtl-contract rules`. A rule whose
+reason is written down is a rule nobody deletes in a hurry.
+
+```bash
+gimme-the-lint materialize   # write down the API contract FastAPI only computes at runtime
+gimme-the-lint verify        # the checks that need a database (CI only — never a git hook)
+```
+
+**Debt is grandfathered; defects are not.** A missing column on a write schema is debt —
+baseline it, fix it at your own pace. A response field that 500s every read is a
+**defect**: it cannot be baselined, because grandfathering it means writing down *"we
+accept that this endpoint is broken."* You can still except it — in config, with a
+mandatory reason. The friction is the feature.
+
+Start with [`.documentation/contract-guide.md`](.documentation/contract-guide.md).
 
 ## Shipped lint configs
 
@@ -162,11 +212,18 @@ git add -A && git commit -m "…" # retry
 | `gimme-the-lint check --all` | Lint every app, not just staged changes |
 | `gimme-the-lint check --fix` | Auto-fix where the linter supports it |
 | `gimme-the-lint check --strict` | Fail if a linter is missing for present code |
+| `gimme-the-lint check --stage=push` | Also run the slower whole-app checks (the contract engine) |
+| `gimme-the-lint materialize` | Write down the API contract your code computes at runtime |
+| `gimme-the-lint verify` | Run the checks that need a database (CI only — never a git hook) |
 | `gimme-the-lint dashboard` | Per-app baseline status + drift |
 | `gimme-the-lint migrate` | Migrate a v1 (`.lttf`) project to the v2 `.gtl/` layout |
 | `gimme-the-lint hooks` | Install pre-commit and pre-push git hooks |
 | `gimme-the-lint status` | Overall plugin status |
 | `gimme-the-lint uninstall` | Remove hooks and config |
+
+> **Upgrading from v2.5?** Re-run `gimme-the-lint hooks`, or the new checks silently
+> never fire. See [`.documentation/upgrade-guide.md`](.documentation/upgrade-guide.md)
+> — it carries the full error catalog.
 
 ---
 
@@ -281,16 +338,22 @@ retries — only asking you if violations remain after auto-fix.
 ## GitHub Action
 
 ```yaml
-- uses: TheGlitchKing/gimme-the-lint@v2
+- uses: TheGlitchKing/gimme-the-lint@v2.6.0
   with:
     mode: full          # 'full' or 'progressive'
     fix: false
     strict: false
+    verify: false       # also run the checks that need a database (CI only)
     comment-on-pr: true
 ```
 
 A ready-to-copy workflow lives at
-[`.github/workflows/lint.template.yml`](.github/workflows/lint.template.yml).
+[`templates/lint.workflow.template.yml`](templates/lint.workflow.template.yml).
+
+> **Pin a version.** A floating `@v2` tag is only safe if it exists — and until
+> v2.6.0 it did not, so every workflow copied from the old template failed with
+> `unable to find version v2`. `@v2` now exists and moves with each 2.x release; if
+> you would rather not track a moving tag, pin the exact one as above.
 
 ---
 

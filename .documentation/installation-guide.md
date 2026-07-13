@@ -130,3 +130,27 @@ gimme-the-lint uninstall
 Removes git hooks and a repo-root `gimme-the-lint.config.js`. Everything under
 `.gtl/` (baselines, manifest, and a `.gtl/config.js`), linter configs, and
 `.venv` are left in place — remove them manually if desired.
+
+---
+
+## v2.6: the contract checker
+
+The entity-contract check is a Python program (`gtl-contract`) that ships **inside** the
+npm package and installs into your venv from the local path — not from PyPI:
+
+```bash
+pip install -e ./node_modules/@theglitchking/gimme-the-lint/python
+```
+
+`gimme-the-lint install` does this for you. Two reasons it is vendored rather than
+published:
+
+- **Air-gapped installs need no network.** `--offline` is a supported mode; a PyPI
+  dependency would force every air-gapped user to provision it into their image by hand.
+- **Version skew is impossible.** The adapter and the checker share a JSON wire format.
+  One artifact, no version to skew.
+
+It declares **no dependencies**, deliberately: it inspects *your* SQLAlchemy and *your*
+Pydantic, at the versions your app already pins.
+
+Not installed → the check warn-skips and never blocks.

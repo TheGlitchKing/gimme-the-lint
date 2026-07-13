@@ -1,0 +1,38 @@
+[project]
+name = "gtl-contract"
+version = "2.6.0"
+description = "The entity-contract checker for gimme-the-lint: does your persistence model agree with the schemas that expose it?"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "TheGlitchKing" }]
+keywords = ["linting", "schema", "contract", "drift", "sqlalchemy", "pydantic", "fastapi"]
+
+# Deliberately DEPENDENCY-FREE.
+#
+# gtl-contract inspects YOUR application's SQLAlchemy models and Pydantic schemas,
+# which means it must import them — using the versions your app already pins. If
+# this package declared `sqlalchemy>=2` it could drag a second, different
+# SQLAlchemy into the venv and inspect a registry your app never populated. It
+# would then confidently report on a model layer that does not exist.
+#
+# So the ORM and schema libraries are treated as ambient: present because the app
+# under inspection brought them. If they are absent, there is nothing to check,
+# and the provider says so rather than installing an opinion.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "sqlalchemy>=2.0", "pydantic>=2.0", "fastapi>=0.110"]
+
+[project.scripts]
+gtl-contract = "gtl_contract.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gtl_contract*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

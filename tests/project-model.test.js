@@ -44,7 +44,7 @@ describe('project-model', () => {
       const apps = projectModel.discoverApps(TMP);
       const byPath = Object.fromEntries(apps.map((a) => [a.appPath, a.linters]));
       assert.deepStrictEqual(byPath['apps/orders-api'], ['eslint']);
-      assert.deepStrictEqual(byPath['apps/orders-worker'], ['ruff']);
+      assert.deepStrictEqual(byPath['apps/orders-worker'], ['contract', 'ruff']);
       assert.deepStrictEqual(byPath['apps/billing-events'], ['golangci-lint']);
       assert.deepStrictEqual(byPath['apps/audit-stream'], ['clippy']);
     });
@@ -96,7 +96,7 @@ describe('project-model', () => {
 
     it('treats a lone manifest at the root as the app', () => {
       const apps = projectModel.discoverApps(SP);
-      assert.deepStrictEqual(apps, [{ appPath: '.', linters: ['ruff'] }]);
+      assert.deepStrictEqual(apps, [{ appPath: '.', linters: ['contract', 'ruff'] }]);
     });
   });
 

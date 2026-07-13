@@ -112,7 +112,12 @@ describe('Bug B — discovery binds the right directories', () => {
   it('binds the repo-root ruff config to the root, not nothing', () => {
     const apps = projectModel.discoverApps(TMP);
     const byPath = Object.fromEntries(apps.map((a) => [a.appPath, a.linters]));
-    assert.deepStrictEqual(byPath['.'], ['ruff'], 'root pyproject binds ruff at root');
+    // A Python manifest binds the code linter AND the entity-contract check.
+    assert.deepStrictEqual(
+      byPath['.'],
+      ['contract', 'ruff'],
+      'root pyproject binds ruff and the contract check at root'
+    );
     assert.deepStrictEqual(byPath['frontend'], ['eslint']);
     assert.deepStrictEqual(byPath['keycloakify'], ['eslint']);
   });
@@ -136,7 +141,7 @@ describe('Bug B — discovery binds the right directories', () => {
     const result = await configManager.writeAppsConfig(TMP, apps);
     assert.strictEqual(result.created, true);
     const written = require(result.path);
-    assert.deepStrictEqual(written.apps['.'], { linters: ['ruff'] });
+    assert.deepStrictEqual(written.apps['.'], { linters: ['contract', 'ruff'] });
     assert.deepStrictEqual(written.apps['frontend'], { linters: ['eslint'] });
     // It must never clobber an existing config.
     const second = await configManager.writeAppsConfig(TMP, apps);

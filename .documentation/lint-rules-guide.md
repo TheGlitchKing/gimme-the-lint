@@ -234,3 +234,17 @@ escalate `warn`→`error` and enable `nursery`; golangci-lint: add linters; Ruff
 add rule codes; Clippy: `pedantic`/`cargo` at `deny` + `nursery`; TFLint:
 `preset = "all"`). Because violations are progressively baselined, raising
 strictness never blocks existing code — only new code is held to the higher bar.
+
+---
+
+## Beyond lint rules: the entity contract
+
+The rules above answer *"is this code well-formed?"*.
+
+As of v2.6, gimme-the-lint also asks **"does your data model agree with the schemas that
+expose it?"** — a different question, with a different failure mode. Nothing is
+malformed, nothing crashes, and the API returns 201 while quietly dropping the field the
+user typed.
+
+Seventeen contract rules, each standing on a production bug:
+[`contract-rules-guide.md`](contract-rules-guide.md).

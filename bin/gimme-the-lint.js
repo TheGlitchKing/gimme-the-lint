@@ -139,6 +139,15 @@ program
   .option('--fix', 'Auto-fix violations where the linter supports it')
   .option('--all', 'Lint the entire codebase, not just staged changes')
   .option('--strict', 'Fail when a linter is missing for code that is present')
+  .option(
+    '--stage <stage>',
+    'Which checks to run: "commit" (fast, default) or "push" (adds slower whole-app checks)',
+    'commit'
+  )
+  .option(
+    '--no-stale-baseline',
+    'Fail if the baseline grandfathers violations that no longer occur'
+  )
   .action(async (opts) => {
     const chalk = require('chalk');
     const { runCheck } = require('../lib/check');
@@ -148,6 +157,9 @@ program
         fix: opts.fix,
         changedOnly: !opts.all,
         strict: opts.strict,
+        stage: opts.stage,
+        // commander maps `--no-stale-baseline` to staleBaseline === false
+        noStaleBaseline: opts.staleBaseline === false,
       });
       console.log(formatCheckReport(report));
       process.exit(report.ok ? 0 : 1);
@@ -293,6 +305,116 @@ program
   });
 
 program
+  .command('verify')
+  .description('Run the checks that need a database or network (CI only — never a git hook)')
+  .option('--offline', 'Air-gapped: fail rather than silently skip external checks')
+  .action(async (opts) => {
+    const chalk = require('chalk');
+    const { runVerify } = require('../lib/verify');
+    const { formatCheckReport } = require('../lib/report');
+
+    // Deliberately its own command rather than a flag on `check`. A flag can be
+    // passed by accident, and an invariant that depends on nobody passing a flag is
+    // not an invariant. `check` is a git hook and must stay hermetic; this is where
+    // the database-touching checks live, in CI, where credentials legitimately do.
+    try {
+      const report = await runVerify(process.cwd(), { offline: opts.offline });
+      console.log(formatCheckReport(report));
+      process.exit(report.ok ? 0 : 1);
+    } catch (err) {
+      if (err.code === 'OFFLINE_EXTERNAL') {
+        // Fail closed. A silent skip here would let a CI job go green having verified
+        // nothing at all — a provisioning bug, wearing the costume of a passing build.
+        console.error(chalk.red(`\n✗ ${err.message}\n`));
+        process.exit(1);
+      }
+      console.error(chalk.red(`\n✗ ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('materialize')
+  .description('Write down the API contract your code computes at runtime (openapi.json)')
+  .action(async () => {
+    const chalk = require('chalk');
+    const fs = require('fs-extra');
+    const path = require('path');
+    const { resolveUnits } = require('../lib/units');
+    const adapters = require('../lib/adapters');
+
+    // The ONLY command that writes a lockfile into the working tree. `check` never
+    // does — a hook that edits your files behind your back is a hostile hook — and
+    // `baseline` has no business touching source. One command, one code path, so
+    // "what could have written this?" always has one answer.
+    const root = process.cwd();
+    let wrote = 0;
+
+    console.log(chalk.blue('\ngimme-the-lint: materialize\n'));
+
+    for (const unit of resolveUnits(root)) {
+      for (const linterId of unit.linters) {
+        let adapter;
+        try {
+          adapter = adapters.getAdapter(linterId, {
+            projectRoot: root,
+            appRoot: unit.root,
+          });
+        } catch {
+          continue;
+        }
+        if (!adapter.detect(unit.root) || !adapter.available()) continue;
+
+        let result;
+        try {
+          result = adapter.materialize();
+        } catch (err) {
+          console.log(`  ${chalk.red('✗')} ${unit.id} · ${linterId} — ${err.message}`);
+          continue;
+        }
+        if (!result) continue; // this adapter derives nothing. Most do not.
+
+        // Provenance: a file we did not write is somebody's hand-authored source of
+        // truth, and regenerating over it would destroy their work on a routine
+        // command. The adapter refuses; we report and move on.
+        if (result.skipped) {
+          console.log(`  ${chalk.yellow('·')} ${unit.id} · ${linterId}`);
+          console.log(chalk.yellow(`      ${result.skipped}`));
+          continue;
+        }
+
+        const existing = (await fs.pathExists(result.path))
+          ? await fs.readFile(result.path, 'utf8')
+          : null;
+
+        if (existing === result.content) {
+          console.log(
+            `  ${chalk.dim('·')} ${unit.id} · ${linterId} ${chalk.dim('— already current')}`
+          );
+          continue;
+        }
+
+        await fs.ensureDir(path.dirname(result.path));
+        await fs.writeFile(result.path, result.content);
+        wrote += 1;
+        console.log(
+          `  ${chalk.green('✓')} ${unit.id} · ${linterId} → ` +
+            chalk.cyan(path.relative(root, result.path))
+        );
+      }
+    }
+
+    console.log('');
+    if (wrote > 0) {
+      console.log(chalk.blue('Commit the lockfile — it is what makes a breaking API'));
+      console.log(chalk.blue('change visible in a pull request instead of in production.'));
+    } else {
+      console.log(chalk.dim('Nothing to write.'));
+    }
+    console.log('');
+  });
+
+program
   .command('dashboard')
   .description('Show the progressive linting dashboard (baselines + drift)')
   .action(async () => {
@@ -390,9 +512,30 @@ program
     console.log(`  Git repo:      ${hookStatus.gitRepo ? chalk.green('yes') : chalk.red('no')}`);
     if (hookStatus.gitRepo) {
       for (const [hook, status] of Object.entries(hookStatus.hooks)) {
-        const color = status === 'installed' ? chalk.green : status === 'other' ? chalk.yellow : chalk.red;
+        const color =
+          status === 'installed'
+            ? chalk.green
+            : status === 'stale' || status === 'other'
+              ? chalk.yellow
+              : chalk.red;
         console.log(`    ${hook}: ${color(status)}`);
       }
+    }
+    // A stale hook still passes, still looks installed, and quietly runs fewer
+    // checks than the engine now provides. Say so loudly — a silent under-check
+    // is indistinguishable from a clean bill of health.
+    if (hookStatus.stale && hookStatus.stale.length) {
+      console.log('');
+      console.log(
+        chalk.yellow(
+          `⚠ ${hookStatus.stale.join(' and ')} hook(s) are from an older version of ` +
+            'gimme-the-lint.'
+        )
+      );
+      console.log(
+        chalk.yellow('  They still run, but will NOT run the checks added in this release.')
+      );
+      console.log(chalk.blue('  Fix: gimme-the-lint hooks'));
     }
     console.log('');
   });
