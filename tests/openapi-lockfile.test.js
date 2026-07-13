@@ -57,6 +57,12 @@ test.describe('the file-class rule: a lockfile is COMPILED, not authored', () =>
     // the guard off permanently while leaving it looking green — which is precisely
     // the failure the lockfile exists to prevent. It would be a guard guarding
     // nothing, reporting success.
+    // NOTE the explicit `neverBaseline`. The JS side used to INFER it ("everything except
+    // lockfile-missing is a defect"), which worked for exactly as long as there were two
+    // rules — and silently mis-classified the next two the moment they were added. The
+    // provider now declares it, and this stub must reproduce the REAL wire, verified
+    // against gtl-contract's actual output. A stub that omits a field the real thing
+    // sends is a test of a program that does not exist.
     const stale = adapter('/tmp').parse(
       JSON.stringify({
         checked: true,
@@ -66,6 +72,7 @@ test.describe('the file-class rule: a lockfile is COMPILED, not authored', () =>
             ruleId: 'contract/lockfile-stale',
             message: 'no longer matches the code',
             fingerprintKey: 'openapi:lockfile-stale',
+            neverBaseline: true,
           },
         ],
       }),
@@ -121,6 +128,7 @@ test.describe('the file-class rule: a lockfile is COMPILED, not authored', () =>
             ruleId: 'contract/spec-implementation-mismatch',
             message: 'drifted',
             fingerprintKey: 'openapi:spec-implementation-mismatch',
+            neverBaseline: true,
           },
         ],
       }),
@@ -129,6 +137,40 @@ test.describe('the file-class rule: a lockfile is COMPILED, not authored', () =>
     )[0];
 
     assert.strictEqual(mismatch.neverBaseline, true);
+  });
+});
+
+test.describe('the engine does not get a vote on what is a defect', () => {
+  test('neverBaseline comes from the PROVIDER, never from a rule-id guess', () => {
+    // The bug this exists to prevent, which I shipped and then caught:
+    //
+    // openapi.js used to infer the flag by EXCLUSION — `ruleId !== 'lockfile-missing'`.
+    // That is correct for exactly as long as there are two rules. The moment
+    // `route-without-response-model` and `unstable-operation-id` were added, both were
+    // silently promoted to DEFECTS — and route-without-response-model fires 48 times on a
+    // real codebase. Adopting the tool would have meant fixing 48 routes before your next
+    // commit. Nobody does that. They uninstall.
+    //
+    // Rules belong to the linter that defines them.
+    const a = adapter('/tmp');
+
+    const mk = (ruleId, neverBaseline) =>
+      a.parse(
+        JSON.stringify({
+          checked: true,
+          violations: [{ file: 'x', ruleId, message: 'm', fingerprintKey: 'k', neverBaseline }],
+        }),
+        '',
+        0
+      )[0];
+
+    // An unknown rule id the engine has never heard of, declared as debt, stays debt.
+    assert.strictEqual(mk('openapi/some-future-rule', false).neverBaseline, false);
+    // And the same unknown id, declared a defect, is a defect.
+    assert.strictEqual(mk('openapi/some-future-rule', true).neverBaseline, true);
+    // An omitted flag is debt — the safe default. Silently promoting something to
+    // un-baselineable is how you block a push over a rule nobody agreed to.
+    assert.strictEqual(mk('contract/lockfile-stale', undefined).neverBaseline, false);
   });
 });
 
