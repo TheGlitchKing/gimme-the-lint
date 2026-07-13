@@ -338,16 +338,22 @@ retries — only asking you if violations remain after auto-fix.
 ## GitHub Action
 
 ```yaml
-- uses: TheGlitchKing/gimme-the-lint@v2
+- uses: TheGlitchKing/gimme-the-lint@v2.6.0
   with:
     mode: full          # 'full' or 'progressive'
     fix: false
     strict: false
+    verify: false       # also run the checks that need a database (CI only)
     comment-on-pr: true
 ```
 
 A ready-to-copy workflow lives at
-[`.github/workflows/lint.template.yml`](.github/workflows/lint.template.yml).
+[`templates/lint.workflow.template.yml`](templates/lint.workflow.template.yml).
+
+> **Pin a version.** A floating `@v2` tag is only safe if it exists — and until
+> v2.6.0 it did not, so every workflow copied from the old template failed with
+> `unable to find version v2`. `@v2` now exists and moves with each 2.x release; if
+> you would rather not track a moving tag, pin the exact one as above.
 
 ---
 

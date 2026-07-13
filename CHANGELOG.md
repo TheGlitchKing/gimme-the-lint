@@ -147,9 +147,26 @@ CI job go green having verified nothing.
 
 ### Fixed
 
+- **The GitHub Action's documented usage never worked.** The README and the shipped
+  template both said `uses: TheGlitchKing/gimme-the-lint@v2` — and **that tag has never
+  existed.** Every user who followed the docs got `unable to find version v2`. The
+  floating `v2` tag now exists and moves with each 2.x release; the README and template
+  pin `@v2.6.0` explicitly.
+- **The workflow *template* was being executed as a live workflow.** It sat in
+  `.github/workflows/lint.template.yml`, and GitHub Actions runs every `.yml` in that
+  directory regardless of what it is called. So it ran on every PR to this repo, for the
+  whole v2 line, and failed every time — against the `@v2` tag above. Moved to
+  `templates/`, where the other templates live and where GitHub will not execute it.
+- **This repo had no CI.** The only thing in `.github/workflows/` was that broken
+  template, so `npm test` had never run on a pull request. A project whose entire purpose
+  is to stop guards from silently not guarding shipped for a year with a check that was
+  always red and therefore never read. There is now a real CI: the Node suite on 20/22/24,
+  the Python suite on 3.11/3.12/3.13, and a job that packs the tarball, extracts it,
+  pip-installs it and runs the shipped checker — because "it works in the repo" proves
+  nothing about what users actually get.
 - **The npm tarball shipped the Python test suite** — including deliberately-broken
   SQLAlchemy fixtures — into every consumer's `node_modules`. `.npmignore` does not help:
-  `files` is an allowlist and overrides it.
+  `files` is an allowlist and overrides it. CI now fails if they reappear.
 
 ## [2.5.2] - 2026-05-21
 
