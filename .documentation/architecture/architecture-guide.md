@@ -134,6 +134,14 @@ file shows up as new.
 The cost is that a full run is seconds rather than milliseconds, which is what `push`
 is for. Note this is `stage`, not `tier`: they need nothing but files on disk.
 
+They declare it with `wholeProgram = true` on the adapter, and the engine needs to know
+for one further reason: **a baselined violation missing from the results has either been
+fixed or was never looked at, and those are the same absence.** Only an adapter that saw
+everything can tell them apart, so `check` counts stale baseline entries from complete
+runs only — a scoped run reports none, and says so if you asked it to fail on them.
+Whole-program adapters are exempt from that suppression, because they are complete even
+when the run is scoped.
+
 ---
 
 ## The engine

@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-07-17
+
+### Fixed
+
+- **`staleEntries` was inflated on every scoped run, and `--no-stale-baseline` failed any
+  commit that did not stage the whole repo.** (#26)
+
+  `diff()` reports every baselined fingerprint missing from the current results as
+  `fixed`. That is right for a run that looked at everything and nonsense for one that did
+  not: on a staged commit a per-file linter is handed two files, so the rest of the
+  baseline is "missing" only because nobody opened it. Measured: 100 baselined violations,
+  one file staged, nothing actually fixed — **99 reported as stale**.
+
+  So every commit printed a warning that was false (and a warning that is always wrong is
+  one people learn to skip past), and `--no-stale-baseline` — the opt-in ratchet — blocked
+  any commit that did not stage the entire repository, which made it unusable on the hook
+  it exists for. Worse, the code comment proposed making it the default in a future major.
+
+  Stale entries are now counted only from runs that saw everything. The baseline stores
+  `{fingerprint: count}` with no filename, so a scoped run cannot even narrow `fixed` down
+  to the files it did read — the hashes are opaque — and a partial run is therefore
+  excluded whole.
+
+  Asking to fail on staleness in a run that cannot detect it is now **loud** rather than a
+  quiet pass: a ratchet that silently does nothing is worse than no ratchet, because
+  somebody is relying on it.
+
+  Adapters now declare `wholeProgram`. `tsc` and `mypy` set it, so they are trusted even
+  on a scoped run — they ignore targets and check everything regardless, which makes them
+  the only adapters whose stale detection works on a pre-commit hook.
+
 ## [2.8.0] - 2026-07-17
 
 ### Added

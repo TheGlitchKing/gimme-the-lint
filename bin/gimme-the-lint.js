@@ -146,7 +146,8 @@ program
   )
   .option(
     '--no-stale-baseline',
-    'Fail if the baseline grandfathers violations that no longer occur'
+    'Fail if the baseline grandfathers violations that no longer occur (needs --all: ' +
+      'a scoped run cannot tell a fixed violation from a file it never opened)'
   )
   .action(async (opts) => {
     const chalk = require('chalk');
