@@ -3,7 +3,7 @@ title: Backups Registry
 tier: reference
 domains: [backups]
 status: active
-last_updated: '2026-07-13'
+last_updated: '2026-07-18'
 version: '1.0.0'
 purpose: Quick reference for backups documentation
 ---
@@ -35,4 +35,4 @@ purpose: Quick reference for backups documentation
 
 ---
 
-*Last updated: 2026-07-13*
+*Last updated: 2026-07-18*

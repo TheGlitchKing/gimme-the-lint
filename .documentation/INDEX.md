@@ -3,7 +3,7 @@ title: Documentation Index
 tier: reference
 domains: [root]
 status: active
-last_updated: '2026-07-13'
+last_updated: '2026-07-18'
 version: '1.0.0'
 purpose: Navigation hub for all documentation
 ---
@@ -27,7 +27,7 @@ purpose: Navigation hub for all documentation
 | [Procedures](#procedures) | 1 | Step-by-step operational procedures (SOP) |
 | [Quickstart](#quickstart) | 3 | Setup guides, dev workflow, onboarding |
 | [Security](#security) | 0 | Security, auth, Vault, Keycloak, RLS |
-| [Standards](#standards) | 3 | Coding standards (backend, frontend, database, devops, security) |
+| [Standards](#standards) | 4 | Coding standards (backend, frontend, database, devops, security) |
 | [Testing](#testing) | 0 | Test strategies, fixtures, patterns, integration/e2e |
 | [Troubleshooting](#troubleshooting) | 2 | Debug guides, common issues, solutions |
 | [Workflows](#workflows) | 0 | Process documentation, multi-step operations |
@@ -67,7 +67,7 @@ purpose: Navigation hub for all documentation
 
 | Document | Tier | Status | Updated |
 |----------|------|--------|----------|
-| [Architecture](architecture/architecture-guide.md) | reference | active | 2026-07-13 |
+| [Architecture](architecture/architecture-guide.md) | reference | active | 2026-07-17 |
 
 ---
 
@@ -168,6 +168,7 @@ purpose: Navigation hub for all documentation
 | [Contract Rules](standards/contract-rules-guide.md) | standard | active | 2026-07-13 |
 | [Decision vs Debt (and Defects)](standards/decision-vs-debt-guide.md) | standard | active | 2026-07-13 |
 | [Lint Rules](standards/lint-rules-guide.md) | standard | active | 2026-07-13 |
+| [Principles](standards/principles-guide.md) | standard | active | 2026-07-18 |
 
 ---
 
@@ -216,6 +217,6 @@ purpose: Navigation hub for all documentation
 
 ## Maintenance
 
-- **Last generated:** 2026-07-13
+- **Last generated:** 2026-07-18
 - **Run maintenance:** `npx hit-em-with-the-docs maintain`
 - **Regenerate index:** `npx hit-em-with-the-docs index`

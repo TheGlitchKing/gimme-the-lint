@@ -2,11 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Priority-0 rules live in `.claude/rules/` and override convenience, style, and velocity.**
+> Every `.md` file there is auto-loaded at session start (recursively, same priority as this
+> file) — so they are already in context; this note is for humans reading CLAUDE.md, not a
+> load mechanism. Do **not** `@`-import them here: that loads them twice.
+> Adding a rule = adding a file. Verify a session actually loaded them with `/context`.
+
 ## What this is
 
-`gimme-the-lint` is a **progressive-lint engine**: it baselines existing violations so only
-*new* ones block, across any linter and any language. v2.6+ applies the same bargain to
-**contract checking** — does the data model agree with the schemas that expose it.
+`gimme-the-lint` **manages lint violations and data-model/schema drift, progressively**:
+it baselines what already exists so only *new* findings block. Two co-equal domains, one
+bargain — **lint** ("is this code well-formed?", any linter, any language) and
+**contract** ("does the data model agree with the schemas that expose it?", v2.6+).
+Contract checking is younger, not lesser; anything true of one half is presumed true of
+the other. Rationale: `.documentation/standards/principles-guide.md`.
 
 This repo is the tool itself, not a consumer of it. Two artifacts ship as one package:
 
