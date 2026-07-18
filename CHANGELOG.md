@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-07-17
+
+### Added
+
+- **`tsc` and `mypy` adapters — progressive type checking.** (#24) The two biggest static
+  analysis surfaces most repos have, and the classic "we cannot turn it on, there are 800
+  existing errors" problem, which is what a baseline is for.
+
+  They are the first adapters that **ignore the staged-file list and always check the whole
+  program**, because they have to: the type of an expression in one file depends on
+  declarations in another, so a change in `a.ts` surfaces errors in `b.ts` — a file the
+  commit never touched. Handed only the staged files, that breakage reports clean and
+  reaches the base branch with a green tick on it. No engine change was needed for this;
+  the diff already compares the full result set against the full baseline.
+
+  Both run at **push**, not commit — whole-program checking is seconds, and a slow
+  pre-commit hook is a hook people uninstall.
+
+  Their violations are identified by the *shape* of the error rather than its text. A type
+  checker names the types in its message, so renaming one type rewrites hundreds of
+  messages at once; keyed on the message, a pure rename would retire every baselined
+  fingerprint and introduce an equal number of new ones — blocking a refactor that changed
+  no behavior, with re-baselining everything as the only practical way out. Verified
+  against real `tsc` output: the message changes, the fingerprint does not.
+
+  `tsc` binds on a `tsconfig.json`; `mypy` binds on a mypy config (`mypy.ini`,
+  `[tool.mypy]`, `[mypy]`). Both are explicit adoption signals — nobody has one by
+  accident. **mypy is deliberately not bound to every Python app** the way `contract` is:
+  the contract check self-limits (no models, one skip line), but mypy pointed at untyped
+  code reports thousands of true and unasked-for findings, which is the adoption cliff that
+  teaches people to stop reading the output.
+
+### Fixed
+
+- **The LLM footer could tell an agent to auto-fix findings that have no autofix.** (#15)
+  Guidance was computed once per run — `failed.some(u => u.supportsFix)` — so a single
+  failing ESLint app flipped the entire report to "AUTOMATICALLY run `--fix`", including
+  over `contract/*` and `openapi/*` findings. That is not an edge case: `--stage=push` also
+  runs every commit-stage adapter, so mixed runs are the norm.
+
+  `--fix` does nothing for a correctness finding, so an agent told to resolve the failure
+  without asking reaches for the next lever that works — `baseline` — which grandfathers a
+  real bug and exits 0. Reported from an adoption run where the finding in question was on
+  a tenant-isolation column.
+
+  Guidance is now derived **per class**: autofixable adapters get the `--fix` instruction
+  scoped to them by name, and it is never emitted unqualified while a non-fixable adapter
+  is also failing. Adapters whose findings have a *mechanical* remedy that is not `--fix`
+  now declare it (`LinterAdapter#remediation`; `codegen-drift` → `gimme-the-lint
+  materialize`), so those are no longer told to "fix it by hand" — which would have meant
+  hand-editing a generated file that the next `materialize` overwrites.
+
 ## [2.7.1] - 2026-07-13
 
 ### Fixed

@@ -4,11 +4,11 @@ tier: reference
 domains:
   - architecture
 status: active
-last_updated: 2026-07-13T00:00:00.000Z
-version: 2.7.0
+last_updated: 2026-07-17T00:00:00.000Z
+version: 2.8.0
 word_count: 866
 estimated_read_time: 5 minutes
-last_validated: 2026-07-13
+last_validated: 2026-07-17
 ---
 
 # Architecture — where it lives, and why
@@ -19,7 +19,7 @@ last_validated: 2026-07-13
 gimme-the-lint  (npm, Node)          gtl-contract  (Python, in python/)
 ├── the engine                       ├── the introspector
 │   fingerprint / diff / baseline    │   walks the ORM registry, reads the route table
-├── 12 adapters                      ├── 17 rules
+├── 17 adapters                      ├── 21 rules
 │   eslint ruff clippy tflint …      │   and the incident each one stands on
 │   contract  ←────── shells to ────→└── prints violations as JSON
 └── CLI, hooks, GitHub Action
@@ -108,10 +108,31 @@ they would silently have begun importing your app on every commit. Defaulting to
 
 | adapter | tier | stage |
 |---|---|---|
-| eslint, biome, ruff, golangci-lint, clippy, tflint, ansible-lint, squawk, spectral, buf | `local` | `commit` |
-| contract, openapi | `local` | `push` |
+| eslint, biome, ruff, golangci-lint, clippy, tflint, ansible-lint, squawk, spectral, buf, codegen-drift | `local` | `commit` |
+| contract, openapi, tsc, mypy | `local` | `push` |
 | buf-breaking | `reference` | `push` |
 | alembic-check | `external` | `ci` |
+
+### A third axis, and it belongs to exactly two adapters
+
+`tsc` and `mypy` **ignore the file list they are handed and always check the whole
+program.** Every other adapter lints what it is given; at commit time that is the staged
+set.
+
+A type checker cannot work that way. The type of an expression in one file depends on
+declarations in another, so checking the staged files alone is not a cheaper version of
+the same question — it is a weaker one. And the errors a change causes are usually *not
+in the changed file*: alter a return type and the breakage lands in every caller, none of
+which the commit touched. Handed only the staged files, a type checker reports those
+callers clean, and the break reaches the base branch under a green tick.
+
+This needed no engine support. `diff-engine.js` compares the full produced set against
+the full baseline section — there is no scope in the diff at all — so an adapter that
+returns everything gets exactly the right answer, and a caller broken in an untouched
+file shows up as new.
+
+The cost is that a full run is seconds rather than milliseconds, which is what `push`
+is for. Note this is `stage`, not `tier`: they need nothing but files on disk.
 
 ---
 
@@ -168,6 +189,25 @@ That matters because:
 - **Messages enumerate sets.** *"no write schema accepts [a, b]"* becomes *"[a, b, c]"*
   the moment a third column goes missing — a different string, so two already-known
   problems come back as new.
+
+- **Type checkers name types in their messages.** `Argument of type 'Prospect' is not
+  assignable to parameter of type 'Lead'`. Rename `Prospect` and every message mentioning
+  it changes at once — so under message-identity a **pure rename** would retire hundreds
+  of baselined fingerprints and introduce an equal number of new ones, blocking a refactor
+  that changed no behavior. The only practical escape is re-baselining the lot, and a
+  baseline you re-cut under pressure has stopped being a ratchet.
+
+  So `tsc` and `mypy` key on the *shape* of the error — `file::code::message-with-the-type-names-redacted`
+  (`adapters/typecheck-identity.js`). The full message is still carried for display; only
+  identity is redacted. They include `file` in the key **explicitly**, because the keyed
+  scheme drops it: a schema symbol should survive being moved to another file, but a type
+  error is a fact about a place, and the same error in two files is two problems.
+
+  The trade-off, stated plainly: two same-shaped errors of the same code in one file
+  collapse to a single fingerprint. Counting (the diff engine compares occurrence counts,
+  not set membership) means going from one to two still blocks; what is lost is knowing
+  *which* of the two was fixed. That is much smaller than a baseline that dissolves on
+  every refactor.
 
 Absent a key, identity is exactly what it was in v2.5.2 — **byte for byte**, asserted
 against literal digests, because every baseline in every repo is a map keyed by these
