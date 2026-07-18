@@ -96,6 +96,12 @@ test.describe('defaults: every pre-existing adapter is unchanged', () => {
     //                        schema in commit 3 and fix it in commit 7 — blocking
     //                        commit 3 is pedantry. What must not happen is the branch
     //                        REACHING the base still broken.
+    //   tsc           push   WHOLE-PROGRAM. It cannot check only the staged files —
+    //                        the type of an expression here depends on declarations
+    //                        there — so every run is a full run, which is seconds to
+    //                        minutes. Same bargain as contract: too slow per commit,
+    //                        fine per push.
+    //   mypy          push   same shape, same reason.
     const nonDefault = adapters
       .listAdapters()
       .map((id) => adapters.getAdapter(id, { projectRoot: '/tmp', appRoot: '/tmp' }))
@@ -107,6 +113,8 @@ test.describe('defaults: every pre-existing adapter is unchanged', () => {
       'openapi:local/push',
       'alembic-check:external/ci',
       'buf-breaking:reference/push',
+      'tsc:local/push',
+      'mypy:local/push',
     ]);
   });
 });

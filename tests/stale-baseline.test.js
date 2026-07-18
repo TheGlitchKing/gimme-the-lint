@@ -76,55 +76,11 @@ test.describe('reporting', () => {
   });
 });
 
-test.describe('report guidance tells the truth about what is fixable', () => {
-  // The trap this exists to close: the hook used to say "For LLMs: AUTOMATICALLY
-  // run --fix" unconditionally. For a linter with no autofix that advice is a dead
-  // end — and the next lever an agent reaches for is `baseline`, which does not fix
-  // the bug, it GRANDFATHERS it. The agent then reports success, and a real defect
-  // has been silently accepted. Guidance must be derived from the adapters that
-  // actually failed.
-  const failing = (supportsFix, linter) => ({
-    unit: 'root',
-    appPath: '.',
-    linter,
-    supportsFix,
-    status: 'fail',
-    hasBaseline: true,
-    diff: { new: [createViolation({ file: 'a.py', ruleId: 'x', message: 'm' })], baselined: [], fixed: [] },
-  });
-
-  test('fixable linter → tells you (and an LLM) to run --fix', () => {
-    const out = formatCheckReport(
-      report({ ok: false, newViolations: 1, units: [failing(true, 'eslint')] })
-    );
-    assert.match(out, /check --fix/);
-    assert.match(out, /AUTOMATICALLY run/);
-  });
-
-  test('NON-fixable linter → explicitly forbids --fix and baseline', () => {
-    const out = formatCheckReport(
-      report({ ok: false, newViolations: 1, units: [failing(false, 'contract')] })
-    );
-
-    assert.match(out, /no autofix/i);
-    assert.match(out, /Do NOT run --fix/);
-    assert.match(out, /Do NOT run `gimme-the-lint baseline`/);
-    assert.match(out, /grandfathers/);
-    // And it must NOT emit the old advice, which would contradict the above.
-    assert.doesNotMatch(out, /AUTOMATICALLY run/);
-  });
-
-  test('mixed: if ANY failure is fixable, --fix is still worth suggesting', () => {
-    const out = formatCheckReport(
-      report({
-        ok: false,
-        newViolations: 2,
-        units: [failing(true, 'eslint'), failing(false, 'contract')],
-      })
-    );
-    assert.match(out, /check --fix/);
-  });
-});
+// The "report guidance" block that used to live here now has its own file:
+// tests/report-guidance.test.js. It grew past a footnote when the guidance stopped
+// being one boolean for the whole run — and its last test here ("if ANY failure is
+// fixable, --fix is still worth suggesting") asserted the behavior that turned out
+// to be the bug.
 
 test.describe('blocking language matches the hook that is running', () => {
   test('commit stage says "Commit blocked"', () => {

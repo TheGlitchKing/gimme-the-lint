@@ -96,6 +96,30 @@ change in one app never churns the baselines of another.
 | SQL migrations | `squawk` | a `migrations/` directory (any language) |
 | Protobuf | `buf`, `buf-breaking` | `*.proto` files |
 | OpenAPI / AsyncAPI | `spectral` | `openapi.yaml`, `asyncapi.yaml` |
+| TypeScript (types) | `tsc` | `tsconfig.json` |
+| Python (types) | `mypy` | a mypy config (`mypy.ini` or `[tool.mypy]`) |
+
+### Type checkers (v2.8)
+
+`tsc` and `mypy` are the two biggest static-analysis surfaces most repos have, and the
+classic "we can't turn it on, there are 800 existing errors" problem — which is exactly
+what a baseline is for.
+
+They differ from every other adapter in one way: **they ignore the staged-file list and
+always check the whole program.** They have to. The type of an expression in one file
+depends on declarations in another, so a change in `a.ts` produces errors in `b.ts` —
+files your commit never touched. Checked per-file, that breakage reports clean and
+reaches the base branch with a green tick. Checked whole-program, it blocks.
+
+That costs seconds rather than milliseconds, so both run at **push**, not on every commit.
+
+Their violations are also identified differently. A type checker *names the types* in its
+message — `Argument of type 'Prospect' is not assignable to parameter of type 'Lead'` — so
+renaming a type rewrites hundreds of messages at once. Keyed on the message, a pure rename
+would retire every baselined fingerprint and introduce an equal number of new ones,
+blocking a refactor that changed no behavior. So identity is the *shape* of the error with
+the type names redacted, which survives the rename while still telling two different errors
+apart.
 
 ## Contract checks (v2.6)
 
