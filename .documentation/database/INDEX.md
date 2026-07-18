@@ -3,7 +3,7 @@ title: Database Documentation Index
 tier: reference
 domains: [database]
 status: active
-last_updated: '2026-07-13'
+last_updated: '2026-07-18'
 version: '1.0.0'
 purpose: Complete listing of database documentation
 ---
@@ -40,4 +40,4 @@ This domain covers: database, db, postgres, postgresql, mysql, sql, schema, migr
 
 ---
 
-*Last updated: 2026-07-13*
+*Last updated: 2026-07-18*

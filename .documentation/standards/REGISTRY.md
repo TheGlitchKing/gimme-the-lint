@@ -3,7 +3,7 @@ title: Standards Registry
 tier: reference
 domains: [standards]
 status: active
-last_updated: '2026-07-13'
+last_updated: '2026-07-18'
 version: '1.0.0'
 purpose: Quick reference for standards documentation
 ---
@@ -16,7 +16,7 @@ purpose: Quick reference for standards documentation
 
 | Metric | Value |
 |--------|-------|
-| Documents | 3 |
+| Documents | 4 |
 | Category | development |
 | Load Priority | 10/10 |
 
@@ -25,9 +25,11 @@ purpose: Quick reference for standards documentation
 - [Contract Rules](contract-rules-guide.md)
 - [Decision vs Debt (and Defects)](decision-vs-debt-guide.md)
 - [Lint Rules](lint-rules-guide.md)
+- [Principles](principles-guide.md)
 
 ## Recently Updated
 
+- [Principles](principles-guide.md) - 2026-07-18
 - [Contract Rules](contract-rules-guide.md) - 2026-07-13
 - [Decision vs Debt (and Defects)](decision-vs-debt-guide.md) - 2026-07-13
 - [Lint Rules](lint-rules-guide.md) - 2026-07-13
@@ -36,7 +38,7 @@ purpose: Quick reference for standards documentation
 
 | Status | Count |
 |--------|-------|
-| active | 3 |
+| active | 4 |
 | draft | 0 |
 | deprecated | 0 |
 | archived | 0 |
@@ -52,4 +54,4 @@ purpose: Quick reference for standards documentation
 
 ---
 
-*Last updated: 2026-07-13*
+*Last updated: 2026-07-18*
