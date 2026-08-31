@@ -3,7 +3,7 @@ title: Security Registry
 tier: reference
 domains: [security]
 status: active
-last_updated: '2026-07-18'
+last_updated: '2026-08-31'
 version: '1.0.0'
 purpose: Quick reference for security documentation
 ---
@@ -35,4 +35,4 @@ purpose: Quick reference for security documentation
 
 ---
 
-*Last updated: 2026-07-18*
+*Last updated: 2026-08-31*

@@ -265,13 +265,21 @@ git add -A && git commit -m "…" # retry
 | `gimme-the-lint verify` | Run the checks that need a database (CI only — never a git hook) |
 | `gimme-the-lint dashboard` | Per-app baseline status + drift |
 | `gimme-the-lint migrate` | Migrate a v1 (`.lttf`) project to the v2 `.gtl/` layout |
-| `gimme-the-lint hooks` | Install pre-commit and pre-push git hooks |
+| `gimme-the-lint hooks` | Install pre-commit and pre-push git hooks (honors `core.hooksPath`) |
+| `gimme-the-lint hooks --print pre-push` | Print a snippet to embed in a hook you already own |
 | `gimme-the-lint status` | Overall plugin status |
 | `gimme-the-lint uninstall` | Remove hooks and config |
 
 > **Upgrading from v2.5?** Re-run `gimme-the-lint hooks`, or the new checks silently
 > never fire. See [`.documentation/procedures/upgrade-guide.md`](.documentation/procedures/upgrade-guide.md)
 > — it carries the full error catalog.
+
+> **Does your repo set `core.hooksPath`?** Re-run `gimme-the-lint hooks`. Every release
+> before 2.8.2 wrote into `.git/hooks` regardless — a directory git never opens once
+> `core.hooksPath` is set — and then reported them installed. `status` now prints the
+> directory it actually read, and flags the leftovers. Repos that already own their hook
+> files should compose with `hooks --print` rather than surrender the file; see
+> [`.documentation/procedures/git-hooks-guide.md`](.documentation/procedures/git-hooks-guide.md).
 
 ---
 

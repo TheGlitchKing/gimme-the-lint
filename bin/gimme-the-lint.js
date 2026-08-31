@@ -434,11 +434,30 @@ program
 program
   .command('hooks')
   .description('Install git hooks for pre-commit linting')
-  .option('--force', 'Install even when the baseline is incomplete')
+  .option(
+    '--force',
+    'Install anyway: incomplete baseline, or over a hook this tool did not write'
+  )
+  .option(
+    '--print <hook>',
+    'Print a snippet to embed in an existing hook (pre-commit|pre-push) instead of installing'
+  )
   .action(async (opts) => {
     const chalk = require('chalk');
     const gitHooksManager = require('../lib/git-hooks-manager');
     const { findIncompleteBaselines } = require('../lib/baseline');
+
+    // Composition path: repos whose hooks already do three other things need a
+    // snippet to source, not a file we take ownership of. Snippet only — no
+    // baseline check, because this writes nothing and gates nothing by itself.
+    if (opts.print) {
+      if (!['pre-commit', 'pre-push'].includes(opts.print)) {
+        console.error(chalk.red(`\n✗ Unknown hook '${opts.print}' — expected pre-commit or pre-push\n`));
+        process.exit(2);
+      }
+      process.stdout.write(gitHooksManager.hookSnippet(opts.print));
+      return;
+    }
 
     try {
       // Refuse to gate commits against an incomplete baseline: hooks would
@@ -462,8 +481,14 @@ program
         process.exit(1);
       }
 
-      const installed = await gitHooksManager.installHooks(process.cwd());
-      console.log(chalk.green(`\n✓ Installed git hooks: ${installed.join(', ')}\n`));
+      const installed = await gitHooksManager.installHooks(process.cwd(), {
+        force: opts.force,
+      });
+      const hooksDir = gitHooksManager.getHooksDir(process.cwd());
+      console.log(chalk.green(`\n✓ Installed git hooks: ${installed.join(', ')}`));
+      // Say WHERE. Under core.hooksPath this is not .git/hooks, and the whole of
+      // #13 was reporting success without ever naming the directory.
+      console.log(chalk.blue(`  ${path.relative(process.cwd(), hooksDir) || hooksDir}\n`));
       if (incomplete.length && opts.force) {
         console.log(
           chalk.yellow(
@@ -472,6 +497,26 @@ program
         );
       }
     } catch (e) {
+      if (e.name === 'ForeignHookError') {
+        console.error(
+          chalk.red(
+            `\n✗ ${e.conflicts.join(' and ')} ${e.conflicts.length > 1 ? 'were' : 'was'} not ` +
+              'written by gimme-the-lint:\n'
+          )
+        );
+        console.error(chalk.red(`    ${e.hooksDir}\n`));
+        console.error(
+          chalk.yellow(
+            '  Overwriting them would take ownership of hooks your repo already\n' +
+              '  relies on — under core.hooksPath they are version-controlled and\n' +
+              '  shared with your team. Compose instead:\n'
+          )
+        );
+        console.error(chalk.blue('    gimme-the-lint hooks --print pre-commit >> <your hook>'));
+        console.error(chalk.blue('    gimme-the-lint hooks --print pre-push   >> <your hook>\n'));
+        console.error(chalk.yellow('  Or overwrite anyway (a .backup is kept): --force\n'));
+        process.exit(1);
+      }
       console.error(chalk.red(`\n✗ ${e.message}\n`));
       process.exit(1);
     }
@@ -519,6 +564,9 @@ program
     if (venvStatus.ruffVersion) console.log(`    Ruff:        ${venvStatus.ruffVersion}`);
     console.log(`  Git repo:      ${hookStatus.gitRepo ? chalk.green('yes') : chalk.red('no')}`);
     if (hookStatus.gitRepo) {
+      console.log(
+        `  Hooks dir:     ${path.relative(projectRoot, hookStatus.hooksDir) || hookStatus.hooksDir}`
+      );
       for (const [hook, status] of Object.entries(hookStatus.hooks)) {
         const color =
           status === 'installed'
@@ -543,6 +591,20 @@ program
       console.log(
         chalk.yellow('  They still run, but will NOT run the checks added in this release.')
       );
+      console.log(chalk.blue('  Fix: gimme-the-lint hooks'));
+    }
+    // Files in .git/hooks that git will never execute, because core.hooksPath
+    // points elsewhere. Every release before 2.8.2 installed there regardless.
+    if (hookStatus.orphaned && hookStatus.orphaned.length) {
+      console.log('');
+      console.log(
+        chalk.red(
+          `⚠ ${hookStatus.orphaned.join(' and ')} in .git/hooks ` +
+            `${hookStatus.orphaned.length > 1 ? 'are' : 'is'} NEVER RUN — ` +
+            `core.hooksPath sends git to ${path.relative(projectRoot, hookStatus.hooksDir)}.`
+        )
+      );
+      console.log(chalk.yellow('  Those files are left over from an older install. They guard nothing.'));
       console.log(chalk.blue('  Fix: gimme-the-lint hooks'));
     }
     console.log('');

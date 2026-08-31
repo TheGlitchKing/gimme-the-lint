@@ -3,7 +3,7 @@ title: Procedures Registry
 tier: reference
 domains: [procedures]
 status: active
-last_updated: '2026-07-18'
+last_updated: '2026-08-31'
 version: '1.0.0'
 purpose: Quick reference for procedures documentation
 ---
@@ -16,23 +16,25 @@ purpose: Quick reference for procedures documentation
 
 | Metric | Value |
 |--------|-------|
-| Documents | 1 |
+| Documents | 2 |
 | Category | features |
 | Load Priority | 6/10 |
 
 ## Active Documents
 
+- [Git Hooks Guide](git-hooks-guide.md)
 - [Upgrade Guide — v2.5.x to v2.7.0](upgrade-guide.md)
 
 ## Recently Updated
 
+- [Git Hooks Guide](git-hooks-guide.md) - 2026-08-31
 - [Upgrade Guide — v2.5.x to v2.7.0](upgrade-guide.md) - 2026-07-13
 
 ## By Status
 
 | Status | Count |
 |--------|-------|
-| active | 1 |
+| active | 2 |
 | draft | 0 |
 | deprecated | 0 |
 | archived | 0 |
@@ -48,4 +50,4 @@ purpose: Quick reference for procedures documentation
 
 ---
 
-*Last updated: 2026-07-18*
+*Last updated: 2026-08-31*

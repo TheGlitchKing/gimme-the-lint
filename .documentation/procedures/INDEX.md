@@ -3,7 +3,7 @@ title: Procedures Documentation Index
 tier: reference
 domains: [procedures]
 status: active
-last_updated: '2026-07-18'
+last_updated: '2026-08-31'
 version: '1.0.0'
 purpose: Complete listing of procedures documentation
 ---
@@ -14,7 +14,7 @@ purpose: Complete listing of procedures documentation
 
 ## Overview
 
-- **Total Documents:** 1
+- **Total Documents:** 2
 - **Domain:** `procedures/`
 - **Category:** features
 - **Load Priority:** 6/10
@@ -25,6 +25,7 @@ purpose: Complete listing of procedures documentation
 
 | Document | Status | Updated | Words |
 |----------|--------|---------|-------|
+| [Git Hooks Guide](git-hooks-guide.md) | active | 2026-08-31 | 130 |
 | [Upgrade Guide — v2.5.x to v2.7.0](upgrade-guide.md) | active | 2026-07-13 | 1,167 |
 
 ## Keywords
@@ -39,4 +40,4 @@ This domain covers: procedure, procedures, sop, standard-operating-procedure, st
 
 ---
 
-*Last updated: 2026-07-18*
+*Last updated: 2026-08-31*
