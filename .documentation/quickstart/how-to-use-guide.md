@@ -40,12 +40,57 @@ Commit the `.gtl/` directory so the whole team shares the baseline.
 | `check --all` | Lint every app, not just staged changes |
 | `check --fix` | Auto-fix where the linter supports it |
 | `check --strict` | Fail if a linter is missing for present code |
+| `check --json` | Full finding list as JSON on stdout, untruncated |
 | `baseline` | Capture/refresh baselines for every app |
 | `baseline --empty` | Write empty baselines (greenfield) |
 | `dashboard` | Per-app baseline status + drift |
 | `migrate` | Migrate a v1 (`.lttf`) project to the v2 `.gtl/` layout |
 | `hooks` | Install pre-commit + pre-push hooks |
 | `status` | Overall plugin status |
+
+## Triaging a first run: `--json`
+
+The terminal report truncates each app's list at 20 findings (`…and 272 more`). That is
+right for a commit hook and wrong for adoption day, when the question is not *how many*
+but **what shape** — 137 findings is either "137 real bugs" or "137 missing exemptions",
+and those demand opposite responses.
+
+```bash
+gimme-the-lint check --all --stage=push --json > findings.json
+```
+
+Stdout carries **JSON and only JSON**, untruncated. Diagnostics go to stderr.
+
+```bash
+# what kind of findings are these?
+jq -r '.violations[].ruleId' findings.json | sort | uniq -c | sort -rn
+
+# which are defects, and so can never be baselined?
+jq -r '.violations[] | select(.neverBaseline) | "\(.app) \(.ruleId) \(.file)"' findings.json
+```
+
+### Read `allChecked`, not just `ok`
+
+They are two different facts and the format keeps them apart on purpose:
+
+| field | means |
+|---|---|
+| `ok` | Nothing **new** blocked. Mirrors the exit code. |
+| `allChecked` | Every adapter actually ran. **False if anything was skipped.** |
+| `skipped[]` | One entry per adapter that could not look, with the reason. |
+
+A run in which every linter was missing is `ok: true`, exit 0 — exactly as it is on the
+terminal. On a terminal a skip is a yellow `⚠` a human notices; **in JSON there is
+nothing to notice**, so a consumer reading only `ok` would read "we could not look at
+anything" as a clean bill of health. **Check `allChecked` in CI**, not just `ok`:
+
+```bash
+jq -e '.allChecked' findings.json || echo "something could not be checked — see .skipped[]"
+```
+
+> `--format json` does not exist and never has — the flag is `--json`. If you tried the
+> other one, commander wrote `unknown option` to **stderr** while you were watching
+> stdout, which is why it looked like it silently produced nothing.
 
 ## How violations are matched
 

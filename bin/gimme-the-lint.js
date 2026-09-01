@@ -149,6 +149,11 @@ program
     'Fail if the baseline grandfathers violations that no longer occur (needs --all: ' +
       'a scoped run cannot tell a fixed violation from a file it never opened)'
   )
+  .option(
+    '--json',
+    'Emit the full finding list as JSON on stdout, untruncated (for triage, agents, ' +
+      'and CI summaries). Diagnostics go to stderr.'
+  )
   .action(async (opts) => {
     const chalk = require('chalk');
     const { runCheck } = require('../lib/check');
@@ -162,7 +167,16 @@ program
         // commander maps `--no-stale-baseline` to staleBaseline === false
         noStaleBaseline: opts.staleBaseline === false,
       });
-      console.log(formatCheckReport(report));
+      if (opts.json) {
+        // stdout carries JSON and only JSON. The same discipline the Python CLI
+        // keeps, for the same reason: a consumer that has to strip a banner off
+        // the front is a consumer that will one day fail to, and an unparseable
+        // report is an absent one.
+        const { toJson } = require('../lib/json-report');
+        process.stdout.write(`${JSON.stringify(toJson(report), null, 2)}\n`);
+      } else {
+        console.log(formatCheckReport(report));
+      }
       process.exit(report.ok ? 0 : 1);
     } catch (err) {
       console.error(chalk.red(`\n✗ ${err.message}\n`));
