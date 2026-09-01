@@ -147,6 +147,35 @@ On the first real codebase this was pointed at — a mature FastAPI app with 42 
 the answer was **zero defects**. The debt was in the hundreds. That is the shape you
 should expect: the cliff is real, and it is usually a step.
 
+### But "nothing blocks" is not the same as "adoption is cheap"
+
+This page used to stop at the paragraph above, and that was a half-truth worth
+correcting (#16).
+
+A second adoption, 56 models and 248 routes, also had **zero defects** — so, as promised,
+nothing blocked. It still opened with **429 findings** (137 contract, 292 openapi), and
+essentially none of them were bugs: they were deliberately server-managed columns the
+tool had no way to know were deliberate.
+
+Zero defects means *your push is not blocked*. It does not mean the first run is quiet,
+and on a repo that already has its own notion of server-managed columns it will not be.
+That matters because **the natural response to a wall of findings is `baseline`** — and
+baselining the wall grandfathers the handful of real findings along with the noise.
+
+So the honest expectation is two numbers, not one:
+
+| | what it means | what to do |
+|---|---|---|
+| **defects** | blocks your push | fix, or except with a written reason |
+| **debt** | does not block | read it *before* you baseline it |
+
+The second row is where the adoption cost actually lives. Budget for reading it.
+
+After porting their existing declarations into `entities{}`, that second codebase went to
+**0 violations**, and the engine agreed exactly with the hand-rolled pytest contract they
+already had. The findings were real work, correctly identified — the cost was the
+reading, not the fixing.
+
 ---
 
 ## See also

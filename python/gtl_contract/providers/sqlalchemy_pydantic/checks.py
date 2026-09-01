@@ -95,6 +95,49 @@ def _client_columns(record: ModelRecord, config: Config) -> set[str]:
     )
 
 
+# Column names that are almost always a tenant-isolation or ownership boundary.
+#
+# This list changes NOTHING about what fires. It changes what the message SAYS, and
+# that distinction is the whole of why it is allowed to exist.
+#
+# It lives HERE, in the provider, and must never move into `config.py`. The firewall
+# (principle 3) is explicit: "when engine CODE starts knowing what `org_id` means, the
+# firewall has been breached — the fix belongs in a provider, every time." Core's
+# `DEFAULT_SERVER_MANAGED` is a different thing: it SUPPRESSES findings, and suppressing
+# `user_id` everywhere would hide the genuinely-forgotten `user_id` this rule exists to
+# catch. Warning is safe; suppressing on a guess is not.
+#
+# #16: a reporter's `org_id` was flagged `column-not-writable`, and the obvious reading of
+# the message — "make it writable" — produces a write schema in which a CLIENT SETS ITS
+# OWN TENANT. That is cross-tenant write access, arrived at by following the tool's advice.
+TENANCY_COLUMNS = frozenset(
+    {
+        "org_id",
+        "organization_id",
+        "tenant_id",
+        "account_id",
+        "workspace_id",
+        "company_id",
+        "user_id",
+        "owner_id",
+        "author_id",
+        "customer_id",
+        "created_by",
+        "updated_by",
+    }
+)
+
+
+def looks_like_a_tenancy_boundary(column: str) -> bool:
+    """Exact names only — deliberately.
+
+    A pattern like `*_id` would match `property_id` and `invoice_id`, which are ordinary
+    client-supplied foreign keys. Warning on those trains people to ignore the warning,
+    and an ignored security warning is worse than none.
+    """
+    return column.lower() in TENANCY_COLUMNS
+
+
 # --- rule 1: every column is exposed somewhere ----------------------------------
 
 
@@ -105,12 +148,31 @@ def every_client_column_is_writable(record: ModelRecord, config: Config) -> Iter
         writable |= set(schema.model_fields)
 
     for column in sorted(_client_columns(record, config) - writable):
+        if looks_like_a_tenancy_boundary(column):
+            # Same finding, opposite ORDER. The default message leads with "add it to the
+            # write schema", and for a tenancy column that is the dangerous half. The rule
+            # cannot tell "correctly locked down" from "accidentally omitted" — so when the
+            # name says the stakes are cross-tenant writes, the safe reading goes first.
+            message = (
+                f"No write schema for {record.name} accepts `{column}`. "
+                f"`{column}` looks like a tenant or ownership boundary. If it is, THIS "
+                f"FINDING IS CORRECT and nothing is broken — declare it in serverManaged "
+                f"to say so. Do NOT add it to a write schema to silence this: a client "
+                f"that can set its own `{column}` can write into another tenant's data. "
+                f"Only if `{column}` really is client-supplied here should it go on the "
+                f"write schema."
+            )
+        else:
+            message = (
+                f"No write schema for {record.name} accepts `{column}`. A client that "
+                f"sends it gets a 201 and the value is silently dropped. Add it to the "
+                f"write schema, or declare it in serverManaged / intentionallyAbsent "
+                f"with a reason."
+            )
         yield _v(
             R.COLUMN_NOT_WRITABLE,
             f"{record.name}.{column}:writable",
-            f"No write schema for {record.name} accepts `{column}`. A client that sends it "
-            f"gets a 201 and the value is silently dropped. Add it to the write schema, or "
-            f"declare it in serverManaged / intentionallyAbsent with a reason.",
+            message,
             file=record.schema_module or "",
             model=record.name,
             column=column,
