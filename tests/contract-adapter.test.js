@@ -222,3 +222,25 @@ test.describe('discovery', () => {
     assert.deepStrictEqual(apps[0].linters, ['golangci-lint']);
   });
 });
+
+test.describe('the exit-code protocol stays the engine\'s business (#17)', () => {
+  // `gtl-contract --exit-code` (2.9.0) makes the Python CLI return 3 when it checked
+  // and found violations, for people wiring it into CI directly. The ENGINE must never
+  // pass it: it reads `checked` and `violations` off the JSON payload, which carries
+  // strictly more than a status byte can.
+  //
+  // The reason this is pinned rather than left to good sense: exit 1 means COULD NOT
+  // CHECK, and parse() maps that onto ADAPTER_SKIPPED — a loud warning that never
+  // blocks. Any future change that made "found violations" share a code with "could not
+  // look" would report a findings run as a skip, which is a gate that stopped gating.
+  test('the adapter never asks for --exit-code', () => {
+    const adapter = adapters.getAdapter('contract', { projectRoot: '/tmp', appRoot: '/tmp' });
+    const command = adapter.buildCommand([], {});
+    const args = (command && (command.args || command)) || [];
+
+    assert.ok(
+      !JSON.stringify(args).includes('--exit-code'),
+      'the engine reads the JSON, not the status — passing --exit-code would couple it to one'
+    );
+  });
+});

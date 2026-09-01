@@ -6,6 +6,7 @@ Contract with the Node adapter, and it is deliberately narrow:
     exit 0  We checked. `violations` may be empty (genuinely clean) or not.
     exit 1  We could NOT check. `skip` says why, `detail` usually has a traceback.
     exit 2  We were used wrong (bad flag, unknown provider).
+    exit 3  We checked and FOUND violations. Only ever returned with --exit-code.
 
 The distinction between "checked and found nothing" and "could not check" is the
 most important thing this file does. They are both "zero violations" on the wire,
@@ -13,6 +14,21 @@ and collapsing them would let a broken import masquerade as a clean bill of heal
 — a guard reporting green while guarding nothing, which is the exact failure the
 whole tool exists to prevent. So `checked` is an explicit boolean, and the engine
 maps `checked: false` onto its idempotent-skip contract: warn loudly, never block.
+
+## Why "found violations" is 3 and not 1 (#17)
+
+Exiting non-zero on a non-empty `violations` list is the obvious fix, and it is
+wrong: it collides "we found something" with "we could not look". Those are the two
+facts this protocol exists to keep apart, and `lib/adapters/contract.js` reads exit 1
+as `checked:false` — so a run that found 137 real violations would be reported to the
+engine as a SKIP, warned about, and never blocked on. The suggested fix would have
+turned a working gate into a silent one.
+
+So the new code is 3, it is opt-in, and the default is unchanged. The engine never
+passes --exit-code; it reads `checked` and `violations` off the JSON, which is
+richer than any exit status. The flag exists for people wiring this into CI directly
+— which is a real need, because the check imports the app and the only runner with
+the app's Python dependencies is often not the one with Node on it.
 
 Diagnostics go to stderr. stdout carries JSON and only JSON, because anything else
 on it makes us unparseable — and an unparseable linter is a silently absent one.
@@ -106,7 +122,21 @@ def cmd_check(args: argparse.Namespace) -> int:
             "detail": result.detail,
         }
     )
-    return 0 if result.checked else 1
+    return _status(result.checked, result.violations, getattr(args, "exit_code", False))
+
+
+def _status(checked: bool, violations: list, exit_code: bool) -> int:
+    """The exit status, in one place, so `check` and `openapi` cannot disagree.
+
+    Order matters: `checked` is asked FIRST. A run that could not look must report 1
+    whatever --exit-code says, because "we could not look" outranks "we found nothing"
+    — collapsing those two is the failure this whole tool exists to prevent.
+    """
+    if not checked:
+        return 1
+    if exit_code and violations:
+        return 3
+    return 0
 
 
 def cmd_openapi(args: argparse.Namespace) -> int:
@@ -255,7 +285,7 @@ def cmd_openapi(args: argparse.Namespace) -> int:
         )
 
     _emit({"checked": True, "provider": "openapi", "violations": violations, "skip": None})
-    return 0
+    return _status(True, violations, getattr(args, "exit_code", False))
 
 
 def cmd_rules(args: argparse.Namespace) -> int:
@@ -293,6 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--root", default=".", help="Project root (default: cwd)")
     check.add_argument("--config", default=None, help="Path to the JSON config")
     check.add_argument("--provider", default=None, help="Force a provider")
+    check.add_argument("--exit-code", action="store_true", help="Exit 3 when the check succeeds but finds violations (default: exit 0 — findings are reported on stdout, not in the status). Use this when wiring gtl-contract into CI directly. Exit 1 still means COULD NOT CHECK, never 'found something'.")
     check.set_defaults(func=cmd_check)
 
     api = sub.add_parser("openapi", help="Materialize or verify the API contract lockfile")
@@ -305,6 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the document instead of comparing it (used by `materialize`)",
     )
+    api.add_argument("--exit-code", action="store_true", help="Exit 3 when the check succeeds but finds violations (default: exit 0 — findings are reported on stdout, not in the status). Use this when wiring gtl-contract into CI directly. Exit 1 still means COULD NOT CHECK, never 'found something'.")
     api.set_defaults(func=cmd_openapi)
 
     rules_cmd = sub.add_parser("rules", help="Print the rule catalogue as JSON")
