@@ -311,8 +311,54 @@ A route relying on FastAPI's auto-derived `operationId`.
 **Fix — one line, repo-wide:**
 
 ```python
-FastAPI(generate_unique_id_function=lambda route: route.name)
+FastAPI(generate_unique_id_function=lambda r: f"{sorted(r.methods)[0].lower()}_{r.path}")
 ```
+
+Method plus path is what makes an operation unique in an OpenAPI document to begin with,
+so this form **cannot collide**, and it is the only form genuinely decoupled from Python
+identifiers — which is the whole point of the rule.
+
+> ⚠️ **Corrected in 2.9.0.** This rule used to recommend
+> `lambda route: route.name`, and that was wrong twice over:
+> `route.name` **is** the function name (`starlette.routing.get_name` returns
+> `__name__`), so it silenced this rule while leaving the coupling intact — and it
+> **collides** on router factories, 15 routes onto 5 ids on the reporting codebase.
+> Duplicates make the document invalid, which is the exact harm this rule exists to
+> prevent. See
+> [the fact](../knowledge-base/facts/route-name-generator-collides-on-router-factories.md)
+> and `openapi/duplicate-operation-id` below.
+
+A tag-qualified form (`"_".join([*r.tags, r.name])`) reads better and is safe on untagged
+routes, but it is unique only if your tags distinguish your routers, and it is still
+derived from the function name. (`f"{route.tags[0]}_{route.name}"` raises `IndexError` on
+any untagged route — use the `join` form.)
+
+---
+
+### `openapi/duplicate-operation-id`
+
+> 📌 **Fact:** [`lambda route: route.name` collides on router factories](../knowledge-base/facts/route-name-generator-collides-on-router-factories.md)
+
+Two or more operations claiming the same `operationId`.
+
+> **The bug:** duplicate `operationId`s make the OpenAPI document **invalid**. A code
+> generator either collides or silently drops all but one — so a client compiles fine
+> against an endpoint it **can no longer call**. On the reporting codebase, **15 routes
+> shared 5 ids**, and nothing caught it: they had to write their own test.
+
+This is the rule above, held to its own standard. FastAPI's *default* generator includes
+the path and never collides, so a duplicate is almost always the fingerprint of a custom
+`generate_unique_id_function` that is not, in fact, unique — most often the one this
+catalogue used to recommend.
+
+It is **debt**, not a defect, for an unusually direct reason: **we caused these.**
+Blocking a patch upgrade for people who collided by following our own documented advice
+would be indefensible, and principle 2 says a check that cannot be grandfathered blocks
+adoption on day one.
+
+FastAPI *does* warn, once per duplicate, into startup output nobody reads.
+
+**Fix:** qualify the generator — see the form above.
 
 ---
 

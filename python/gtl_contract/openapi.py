@@ -109,8 +109,40 @@ def spec_quality(document: dict[str, Any]) -> list[dict[str, Any]]:
     refactor, touching no API surface — silently renames every client method that calls
     it, and ships as a breaking change to every consumer.
 
-    One line at app construction fixes it repo-wide, so the message says that line.
-    Reporting a problem without its one-line fix is just complaining.
+    Reporting a problem without its fix is just complaining, so the message carries the
+    generator to set. It did not always carry the RIGHT one: through 2.8.2 it recommended
+    `lambda route: route.name`, and that recommendation was wrong twice over (#14).
+
+    First, `route.name` IS the function name — `starlette.routing.get_name(endpoint)`
+    returns `endpoint.__name__`. So the one-liner made the id stop *looking*
+    auto-derived, while leaving the function-name coupling it complains about entirely
+    intact. **You could satisfy this rule without fixing the problem it describes.**
+
+    Second, it collides. Router factories are a normal FastAPI pattern — build three
+    coach routers from one `make_coach_router()` and all three carry a `stream_chat`.
+    Measured on the reporting codebase: 15 routes collapsing onto 5 ids. Verified here
+    against FastAPI 0.139: six operations from one factory collapse to two ids.
+
+    Duplicates make the document INVALID, and a generator then collides or silently drops
+    methods — which is the exact harm this rule exists to prevent. A rule whose fix causes
+    the thing it guards against is worse than no rule.
+
+    ## duplicate-operation-id
+
+    The rule above, holding itself to its own standard. Two operations sharing an
+    operationId is strictly worse than an auto-derived one, and until 2.9.0 it was
+    unchecked — the reporter had to write their own test to find it.
+
+    FastAPI's DEFAULT generator includes the path and the method, so it never collides.
+    Which means a duplicate is almost always the fingerprint of a custom
+    `generate_unique_id_function` — most often the one this very rule used to recommend.
+    We caused these. That is the whole argument for it being DEBT: a defect here would
+    block adoption on a patch upgrade, for people who collided by following our own
+    documented advice.
+
+    FastAPI does emit a `UserWarning` per duplicate at document-build time. It scrolls
+    past in startup output nobody reads, which is the same reason every other rule here
+    exists.
     """
     findings: list[dict[str, Any]] = []
     paths = document.get("paths") or {}
@@ -160,14 +192,74 @@ def spec_quality(document: dict[str, Any]) -> list[dict[str, Any]]:
                             f"{key} uses FastAPI's auto-derived operationId "
                             f"(`{operation_id}`), which is built from the FUNCTION NAME. "
                             f"Rename the handler — a pure refactor touching no API — and "
-                            f"every generated client method silently changes name, which "
-                            f"ships as a breaking change to every consumer. Fix it "
-                            f"repo-wide with one line: "
-                            f"FastAPI(generate_unique_id_function=lambda route: route.name)"
+                            f"every generated client method changes name, which ships as "
+                            f"a breaking change to every consumer. Set "
+                            f"generate_unique_id_function at app construction: "
+                            f"`lambda r: f\"{{sorted(r.methods)[0].lower()}}_{{r.path}}\"` "
+                            f"is unique by construction and is the only form that "
+                            f"actually survives a handler rename. A tag-qualified form "
+                            f"(`\"_\".join([*r.tags, r.name])`) reads better but is only "
+                            f"unique if your tags distinguish your routers, and is still "
+                            f"function-name derived. Do NOT use `lambda r: r.name` alone "
+                            f"— it COLLIDES on router factories, and duplicate "
+                            f"operationIds make the document invalid. "
+                            f"Then commit the lockfile (gimme-the-lint materialize), so "
+                            f"any id change is a reviewable diff instead of a surprise."
                         ),
                     }
                 )
 
+    findings.extend(_duplicate_operation_ids(paths))
+    return findings
+
+
+def _duplicate_operation_ids(paths: dict[str, Any]) -> list[dict[str, Any]]:
+    """Two operations claiming the same operationId.
+
+    Document-wide, so it cannot ride the per-route loop above.
+
+    One finding per duplicated ID, not per colliding route: you fix a collision once,
+    at the generator, and a per-route finding would report the same single mistake three
+    times. The message names the routes so the finding is actionable without the document.
+    """
+    seen: dict[str, list[str]] = {}
+    for route, methods in sorted((paths or {}).items()):
+        if not isinstance(methods, dict):
+            continue
+        for method, op in sorted(methods.items()):
+            if method.lower() not in ("get", "post", "put", "patch", "delete"):
+                continue
+            if not isinstance(op, dict):
+                continue
+            operation_id = op.get("operationId")
+            if operation_id:
+                seen.setdefault(operation_id, []).append(f"{method.upper()} {route}")
+
+    findings = []
+    for operation_id, keys in sorted(seen.items()):
+        if len(keys) < 2:
+            continue
+        findings.append(
+            {
+                "rule": "openapi/duplicate-operation-id",
+                # Keyed on the ID, so the finding survives a route being added to or
+                # removed from the collision. The routes go in the message, not the key.
+                "key": f"{operation_id}:duplicate-operation-id",
+                "message": (
+                    f"operationId `{operation_id}` is claimed by {len(keys)} operations "
+                    f"({', '.join(keys)}). That makes the document INVALID: a code "
+                    f"generator either collides or silently drops all but one, so a "
+                    f"client compiles fine against an endpoint it can no longer call. "
+                    f"FastAPI's default generator never collides — a duplicate means a "
+                    f"custom generate_unique_id_function that is not unique. "
+                    f"`lambda r: r.name` is the usual cause: router factories give every "
+                    f"router the same handler names. "
+                    f"`lambda r: f\"{{sorted(r.methods)[0].lower()}}_{{r.path}}\"` cannot "
+                    f"collide — path plus method is what makes an operation unique in the "
+                    f"document to begin with."
+                ),
+            }
+        )
     return findings
 
 

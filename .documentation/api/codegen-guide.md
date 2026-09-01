@@ -202,8 +202,17 @@ A lockfile can be perfectly fresh and completely worthless.
   handler — a pure refactor, touching no API — and every generated client method silently
   changes name. **243 of 243 routes.** One line at app construction fixes it repo-wide:
   ```python
-  FastAPI(generate_unique_id_function=lambda route: route.name)
+  FastAPI(generate_unique_id_function=lambda r: f"{sorted(r.methods)[0].lower()}_{r.path}")
   ```
+  Method plus path is what makes an operation unique in the document to begin with, so it
+  cannot collide, and it is the only form actually decoupled from Python identifiers.
+  **Not** `lambda route: route.name` — that is the function name, so it silences the rule
+  without decoupling anything, and it collides on router factories. See
+  [the fact](../knowledge-base/facts/route-name-generator-collides-on-router-factories.md).
+- **`openapi/duplicate-operation-id`** — two operations claiming the same `operationId`,
+  which makes the document **invalid**: a generator collides or silently drops all but
+  one, so a client compiles fine against an endpoint it can no longer call. Added in
+  2.9.0, because our own recommended fix above used to cause it.
 
 Both are **debt** (48 findings on day one — if they blocked, you would uninstall). But
 until they are fixed, `codegen-drift` is guarding a fifth of your API with the word `any`.

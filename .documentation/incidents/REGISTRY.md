@@ -3,7 +3,7 @@ title: Incidents Registry
 tier: reference
 domains: [incidents]
 status: active
-last_updated: '2026-08-31'
+last_updated: '2026-09-01'
 version: '1.0.0'
 purpose: Quick reference for incidents documentation
 ---
@@ -35,4 +35,4 @@ purpose: Quick reference for incidents documentation
 
 ---
 
-*Last updated: 2026-08-31*
+*Last updated: 2026-09-01*
