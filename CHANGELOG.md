@@ -85,6 +85,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`install` now says that the entity-contract checker needs a step it cannot take.** (#20)
+
+  Investigating the reported docs gap turned up something broader than the report: neither
+  `install` nor `setup-venv.sh` has ever pip-installed `gtl-contract` — in **any** layout,
+  not just the reporter's root-venv-plus-subdirectory one. It creates a venv, puts ruff and
+  mypy in it, and stops. So after a fresh install the contract check skipped forever, and
+  nothing said why.
+
+  It still does not install it, and that is the right call: `gtl-contract` has to run in a
+  venv that can import the **application**, and the venv `install` creates holds linters.
+  Putting the checker there would yield a checker that loads, cannot import the app, and
+  skips — present, green, verifying nothing. Which venv can import the app is a question
+  only the user can answer, so `install` now prints the command and says which venv it
+  belongs in, rather than guessing.
+
+### Changed
+
+- **Docs: the contract check imports your application — said loudly, where it is needed.** (#20)
+
+  A bold warning in the README and a new **"Where the contract check can run"** section in
+  the contract guide: run it in your **test** job, not your lint job. It needs the app's
+  full runtime dependencies and its import-time environment (the reporting app raises
+  without `KEYCLOAK_URL`, because a module-level auth init fetches JWKS on import). Dropped
+  into a typical `lint` job it skips — a green tick over a check that never ran, which is
+  worse than not adding it.
+
+  Plus a **"Layouts"** section covering the two shapes that cover most monorepos — root
+  venv with the app in a subdirectory, and venv beside the app — with the binary
+  resolution order spelled out, since "which of the three places did it look?" is the
+  question a skip actually raises.
+
+- **The PyPI request (#20 item 3) is answered and declined, in the architecture guide.**
+
+  The complaint is fair and not a misunderstanding: vendoring means a Python-only CI job
+  must run `npm ci` first, purely to obtain a Python package. The guide now states the
+  trade in a table rather than only listing vendoring's benefits. It is kept because the
+  adapter and checker share a JSON wire protocol with no negotiation step, and a skewed
+  pair does not fail loudly — it produces a report the other half misreads. A tool whose
+  thesis is "never report green while not guarding" should not trade a silent-skew failure
+  mode for a removed setup step.
+
 - **`gimme-the-lint check --fail-on-skip`** — a skip can now fail the run. (#19)
 
   `⚠ SKIPPED backend · contract` correctly means UNVERIFIED, and it did not fail the run —

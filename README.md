@@ -173,6 +173,14 @@ baseline it, fix it at your own pace. A response field that 500s every read is a
 accept that this endpoint is broken."* You can still except it — in config, with a
 mandatory reason. The friction is the feature.
 
+> ⚠️ **The contract check imports your application.** Run it somewhere that can already
+> import your app — **your test job, not your lint job.** It needs your app's full runtime
+> dependencies and its import-time environment variables. Dropped into a typical `lint`
+> job it will *skip*, and a skip is not a pass: you get a green tick over a check that
+> never ran. `gimme-the-lint install` does not install it for this reason — the venv it
+> creates has ruff and mypy, not your app. See
+> [Where the contract check can run](.documentation/api/contract-guide.md#where-the-contract-check-can-run).
+
 Start with [`.documentation/api/contract-guide.md`](.documentation/api/contract-guide.md).
 
 ## Shipped lint configs

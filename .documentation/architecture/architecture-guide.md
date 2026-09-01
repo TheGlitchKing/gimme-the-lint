@@ -65,6 +65,31 @@ could drag a second, different SQLAlchemy into the venv and inspect a registry y
 application never populated — and then report confidently on a model layer that does not
 exist.
 
+#### The cost, which is real: a Python job now depends on `npm ci`
+
+This was raised in #20 and it is a fair complaint, not a misunderstanding. A CI job that
+otherwise touches no Node has to run `npm ci` first, purely to obtain a Python package.
+That is awkward, and vendoring is what makes it so.
+
+**We are keeping it anyway**, and the trade is deliberate rather than accidental:
+
+| | vendored (today) | on PyPI |
+|---|---|---|
+| air-gapped install | works, no network | needs the package provisioned by hand |
+| adapter/checker version skew | structurally impossible | possible, and silent |
+| Python-only CI job | needs `npm ci` | clean |
+
+The second row is what settles it. The adapter and the checker share a JSON wire
+protocol with no negotiation step, and a skewed pair does not fail loudly — it produces
+a report the other half misreads. Publishing a second distribution channel creates a
+version pair that can disagree, in exchange for removing a setup step. A tool whose whole
+thesis is "never report green while not guarding" should not take that trade.
+
+The awkwardness is real and the answer to it is documentation, not a second artifact:
+install the checker once into the venv that runs your tests (see
+[`contract-guide.md`](../api/contract-guide.md#which-venv-gets-gtl-contract)) and the
+`npm ci` coupling is a one-time setup cost rather than a per-job one.
+
 ---
 
 ## Tier and stage — two orthogonal axes
