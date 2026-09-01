@@ -109,10 +109,93 @@ guarding nothing, which is the exact failure this whole tool exists to eliminate
 So `check` prints `⚠ SKIPPED` with the reason and the traceback, and the commit
 proceeds. If you see one, the contract was **not** verified.
 
+## Where the contract check can run
+
+> ⚠️ **The contract check IMPORTS YOUR APPLICATION.**
+> Run it somewhere that can already import your app — **your test job, not your lint
+> job.**
+
+This is the single biggest obstacle to putting the check where it naturally belongs, and
+it is obvious only in hindsight. `contract.app = "app.main:app"` means the checker calls
+`importlib.import_module("app.main")`. Whatever runs it therefore needs:
+
+- the app's **full runtime dependencies** — fastapi, sqlalchemy, pydantic, structlog, the
+  whole `requirements.txt`. Not a linting venv with ruff in it.
+- the app's **import-time environment**. If a module-level auth init fetches JWKS on
+  import, the check needs `KEYCLOAK_URL` set, or the import raises.
+
+A typical `lint` job installs a linter and nothing else. Drop the contract check in there
+and it **skips** — and a skip is not a pass. You get a green tick over a check that never
+ran, which is worse than not adding it at all. Use
+[`--fail-on-skip`](../quickstart/how-to-use-guide.md#a-skip-is-not-a-pass--especially-in-ci)
+if you want that to be loud.
+
+The import is deliberate, not an implementation shortcut. The provider imports the app
+rather than parsing filenames because **unconventionally-named write schemas are exactly
+the ones a static scan misses** — and misses invisibly.
+
+### Which venv gets `gtl-contract`
+
+`gimme-the-lint install` does **not** install it, and says so at the end of its output.
+It cannot: the venv it creates holds ruff and mypy, and installing the checker there
+would produce a checker that loads, cannot import your app, and skips. Which venv can
+import your app is a question only you can answer.
+
+```bash
+# into the venv your TESTS run in
+<your-app-venv>/bin/pip install -e ./node_modules/@theglitchking/gimme-the-lint/python
+```
+
+`contract.js` then resolves the binary in this order:
+
+1. `<appRoot>/.venv/bin/gtl-contract`
+2. `<projectRoot>/.venv/bin/gtl-contract`
+3. `PATH`
+
+## Layouts
+
+Two shapes cover most monorepos.
+
+### Root venv, app in a subdirectory
+
+```
+repo/
+├── .venv/                 ← the app's venv, at the root
+├── backend/
+│   ├── pyproject.toml     ← the unit; `app.models` is importable from HERE
+│   └── app/
+└── frontend/
+```
+
+```bash
+.venv/bin/pip install -e ./node_modules/@theglitchking/gimme-the-lint/python
+```
+
+The root venv is found by resolution step 2. The check runs with `backend/` as its root,
+because `app.models` is only importable from there — which is exactly what the per-app
+unit is for, and it needs no extra configuration: `backend/pyproject.toml` binds the unit.
+
+### Venv beside the app
+
+```
+repo/
+└── backend/
+    ├── .venv/             ← found by resolution step 1
+    ├── pyproject.toml
+    └── app/
+```
+
+```bash
+backend/.venv/bin/pip install -e ./node_modules/@theglitchking/gimme-the-lint/python
+```
+
+Nothing to configure in either case. If the check reports `skipped`, the reason names
+which of the three resolution steps came up empty.
+
 ## Setup
 
 ```bash
-gimme-the-lint install     # installs gtl-contract into your venv
+gimme-the-lint install     # creates the linting venv (ruff, mypy) — NOT gtl-contract
 gimme-the-lint hooks       # pre-commit + pre-push
 gimme-the-lint baseline    # grandfather existing debt (defects are refused, loudly)
 ```

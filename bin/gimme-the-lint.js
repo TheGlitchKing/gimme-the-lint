@@ -73,6 +73,28 @@ program
       console.log('  gimme-the-lint baseline     Capture progressive-lint baselines');
       console.log('  gimme-the-lint hooks        Install git hooks');
       console.log('  gimme-the-lint dashboard    View linting status');
+
+      // The one manual step, stated where it is actually needed. Leaving it out is how
+      // somebody ends up with a contract check that silently skips forever (#20).
+      if (result.contractSetup) {
+        console.log('');
+        console.log(chalk.yellow('The entity-contract check needs one more step:'));
+        console.log('');
+        console.log(chalk.blue(`  <your-app-venv>/bin/pip install -e ${path.relative(process.cwd(), result.contractSetup.pythonPackage) || result.contractSetup.pythonPackage}`));
+        console.log('');
+        console.log(
+          '  It IMPORTS YOUR APPLICATION, so it must live in a venv that can already'
+        );
+        console.log(
+          '  import it — the one your tests run in, not necessarily the one above'
+        );
+        console.log(
+          '  (which has ruff and mypy). Install it in the wrong venv and the check'
+        );
+        console.log('  will load, fail to import your app, and SKIP.');
+        console.log('');
+        console.log(chalk.dim('  Details: .documentation/api/contract-guide.md#where-the-contract-check-can-run'));
+      }
       console.log('');
     } catch (e) {
       console.error(chalk.red(`\n✗ Installation failed: ${e.message}\n`));
