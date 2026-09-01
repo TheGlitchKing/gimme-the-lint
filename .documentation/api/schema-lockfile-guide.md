@@ -134,6 +134,51 @@ renames a field, never regenerates, and the lockfile keeps asserting the old sha
 forever — so the breaking-change check compares two identical stale files and reports no
 breakage. The guard goes inert and still shows green.
 
+### ⚠ Committing the lockfile puts every `example` into a scanned file
+
+**Expect your first adoption PR to fail secret scanning.** This is the tool working, but
+it is a bad surprise if nobody warned you (#23).
+
+Every `example` value in your Pydantic schemas ships **verbatim** in the emitted document:
+
+```python
+reset_token: str = Field(..., json_schema_extra={"example": "eyJhbGciOiJIUzI1NiI..."})
+```
+
+```json
+"reset_token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiI..." }
+```
+
+That fake JWT lived harmlessly in your source for years. Committing the lockfile moves it
+from *a string in a Python file* into **a committed artifact a secret scanner walks** —
+and a scanner cannot tell a fake JWT from a real one. Anything credential-shaped —
+JWTs, API-key patterns, bearer tokens, connection strings — will be flagged.
+
+On the reporting codebase this failed the adoption PR on `generic-api-key`, twice, on the
+same fake reset token.
+
+**Fix them at the source:**
+
+```python
+reset_token: str = Field(..., json_schema_extra={"example": "<the reset token from the email link>"})
+```
+
+Scanner-clean, and a better example than a truncated base64 blob — nobody learned anything
+from the JWT.
+
+> 🔴 **Do NOT allowlist `openapi.json` in your gitleaks config.** It is the single file
+> that mirrors your entire API surface. Allowlisting it to clear one fake JWT permanently
+> blinds the scanner to every real credential that ever lands in a schema default, an
+> example, or a description — and it will look green while doing it.
+>
+> The shipped `.gitleaks.toml` allowlists `/examples/` and `/templates/` **paths**, and
+> carries stopwords like `placeholder` and `fake-key`. Reach for a narrower fix in that
+> direction — a stopword, a specific regex — long before a whole-file exemption. Better
+> still, fix the example.
+
+The finding is not noise. A scanner objecting to your examples is telling you there are
+credential-shaped strings in your source, and it is right to.
+
 ---
 
 ## The downstream win — now owned by the tool

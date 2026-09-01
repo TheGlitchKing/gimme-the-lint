@@ -85,6 +85,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`materialize` warns, once, that committing the lockfile puts every `example` into a
+  secret-scanned file.** (#23)
+
+  Every `example` in your Pydantic schemas ships **verbatim** in the emitted document.
+  Committing the lockfile moves those strings from *a value in a Python file* into **a
+  committed artifact a secret scanner walks** — and a scanner cannot tell a fake JWT from
+  a real one. On the reporting codebase gitleaks failed the adoption PR on
+  `generic-api-key`, twice, on the same fake reset token that had sat harmlessly in the
+  source for years.
+
+  The finding is correct — there really are credential-shaped strings in the source — but
+  meeting it as a red build on the adoption PR is a bad first impression, and the tempting
+  fix is to allowlist `openapi.json`. **That is the one thing not to do:** the lockfile
+  mirrors the entire API surface, so exempting it permanently blinds the scanner to every
+  real credential that later lands in a default, an example, or a description — green
+  while guarding nothing.
+
+  So `materialize` says it at the only moment it helps: the file is new, it carries
+  examples, and it is about to be committed. Not on every refresh — noise is how people
+  learn to skip output they should read.
+
+  New knowledge-base fact `pydantic-field-examples-ship-in-the-lockfile` with a
+  `verify_command` CI executes, a warning section in the lockfile guide, and a test
+  asserting the shipped `.gitleaks.toml` never exempts `openapi.json`.
+
 - **The `lockfile` config key never reached the Python CLI.** (#22)
 
   `cmd_openapi` read only `args.lockfile`, and `Config` had no `lockfile` field at all —
