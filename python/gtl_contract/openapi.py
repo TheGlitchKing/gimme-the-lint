@@ -166,20 +166,52 @@ def spec_quality(document: dict[str, Any]) -> list[dict[str, Any]]:
                     success = responses[code]
                     break
 
-            if success is not None and not _has_schema(success):
-                findings.append(
-                    {
-                        "rule": "openapi/route-without-response-model",
-                        "key": f"{key}:no-response-model",
-                        "message": (
-                            f"{key} declares no response_model, so its response schema is "
-                            f"EMPTY. Nothing downstream can know what this endpoint returns "
-                            f"— a code generator will type it `any`, and the client will "
-                            f"compile against a shape nobody has checked. Add "
-                            f"`response_model=...` to the route."
-                        ),
-                    }
-                )
+            if success is not None:
+                described, empty = _media_types(success)
+
+                if not described:
+                    # NOTHING is described. The classic case, and its fingerprint is
+                    # unchanged byte-for-byte — every consumer baseline is keyed by it
+                    # (principle 6), and the reporting codebase alone took 48 of these
+                    # to 0.
+                    findings.append(
+                        {
+                            "rule": "openapi/route-without-response-model",
+                            "key": f"{key}:no-response-model",
+                            "message": (
+                                f"{key} declares no response_model, so its response schema is "
+                                f"EMPTY. Nothing downstream can know what this endpoint returns "
+                                f"— a code generator will type it `any`, and the client will "
+                                f"compile against a shape nobody has checked. Add "
+                                f"`response_model=...` to the route."
+                            ),
+                        }
+                    )
+                elif empty:
+                    # Something IS described, and an empty media type rides along beside
+                    # it. This is the case the rule used to pass (#21), and it is a
+                    # DIFFERENT finding with a different fix, so it gets its own key
+                    # rather than reusing the one above — a shared key would let a
+                    # half-fix stay grandfathered under the baseline entry it already had.
+                    findings.append(
+                        {
+                            "rule": "openapi/route-without-response-model",
+                            "key": f"{key}:empty-media-type",
+                            "message": (
+                                f"{key} describes {', '.join(described)}, but also emits "
+                                f"{', '.join(empty)} with an EMPTY schema. A code generator "
+                                f"picking {empty[0]} — the conventional default — types the "
+                                f"endpoint `any`, which is exactly what describing the "
+                                f"response was meant to prevent. FastAPI adds this phantom "
+                                f"when a route declares `responses={{...}}` without saying "
+                                f"what it actually returns: set `response_class=` too "
+                                f"(e.g. StreamingResponse, FileResponse, PlainTextResponse). "
+                                f"Do NOT add `response_model=` for a non-JSON route — "
+                                f"FastAPI serializes THROUGH it, so it is meaningless at "
+                                f"best. Both halves are needed; neither works alone."
+                            ),
+                        }
+                    )
 
             # --- an auto-derived operationId ---
             operation_id = op.get("operationId")
@@ -263,22 +295,35 @@ def _duplicate_operation_ids(paths: dict[str, Any]) -> list[dict[str, Any]]:
     return findings
 
 
-def _has_schema(response: Any) -> bool:
-    """Does this response actually describe a shape?
+def _media_types(response: Any) -> tuple[list[str], list[str]]:
+    """Split a response's media types into (described, empty).
 
-    An empty `content`, or a content entry with no `schema`, is FastAPI saying "I do not
-    know" — which is exactly the case worth catching, and exactly the case that reads as
-    fine if you only check that a 200 exists.
+    This replaced `_has_schema`, which asked the wrong question (#21). It meant *some
+    media type has a schema* and returned on the first one it found — so a route that
+    described `text/event-stream` honestly passed, while the phantom `application/json`
+    FastAPI emits ALONGSIDE it, with an empty schema, went unmentioned.
+
+    A generator picking `application/json` — the conventional default — is then straight
+    back to `any`, which is the precise outcome this rule's own message warns about, with
+    a green tick over it. Verified against FastAPI 0.139: `responses={200: {"content":
+    {"text/event-stream": {...}}}}` yields BOTH media types, and only adding
+    `response_class=` removes the empty one.
+
+    The right question is not "is anything described" but "is anything the client might
+    actually pick left empty".
     """
     if not isinstance(response, dict):
-        return False
+        return [], []
     content = response.get("content")
     if not content:
-        return False
-    for media in content.values():
+        return [], []
+    described, empty = [], []
+    for media_type, media in sorted(content.items()):
         if isinstance(media, dict) and media.get("schema"):
-            return True
-    return False
+            described.append(media_type)
+        else:
+            empty.append(media_type)
+    return described, empty
 
 
 def _looks_auto_derived(operation_id: str, route: str, method: str) -> bool:

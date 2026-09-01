@@ -391,3 +391,108 @@ def test_a_route_with_no_operation_id_at_all_does_not_collide_with_another():
     )
 
     assert "openapi/duplicate-operation-id" not in rules_fired(findings)
+
+
+# --- #21: the phantom application/json ---------------------------------------------
+#
+# `_has_schema` meant "SOME media type has a schema" and returned on the first one it
+# found. So a route that described `text/event-stream` honestly passed — while the
+# phantom `application/json` FastAPI emits alongside it, with an EMPTY schema, went
+# unmentioned. A generator picking `application/json` (the conventional default) is then
+# straight back to `any`: the precise outcome this rule's own message warns about, with a
+# green tick over it.
+#
+# Same shape as #14 — the rule was satisfiable without fixing the problem.
+
+
+def sse_route(media: dict) -> dict:
+    return doc({"/stream": {"post": {"responses": {"200": {"description": "ok", "content": media}}}}})
+
+
+SCHEMA = {"type": "object", "properties": {"delta": {"type": "string"}}}
+
+
+def test_an_empty_media_type_beside_a_described_one_is_caught():
+    """The reporter's exact document, as FastAPI emits it."""
+    findings = spec_quality(
+        sse_route({"application/json": {}, "text/event-stream": {"schema": SCHEMA}})
+    )
+
+    assert "openapi/route-without-response-model" in rules_fired(findings)
+
+
+def test_it_names_the_media_type_that_is_empty_and_the_one_that_is_not():
+    """"Something is empty" is unactionable on a route with three media types."""
+    findings = spec_quality(
+        sse_route({"application/json": {}, "text/event-stream": {"schema": SCHEMA}})
+    )
+    message = next(f["message"] for f in findings if "empty-media-type" in f["key"])
+
+    assert "text/event-stream" in message
+    assert "application/json" in message
+
+
+def test_the_message_gives_BOTH_halves_of_the_fix():
+    """`responses=` alone leaves the phantom; `response_class=` is what removes it.
+
+    Verified against FastAPI 0.139. Telling someone to add `response_model=` here is
+    false guidance (principle 4): a non-JSON route serializes THROUGH it, so it is
+    meaningless at best — and following it leaves the empty application/json in place.
+    """
+    findings = spec_quality(
+        sse_route({"application/json": {}, "text/event-stream": {"schema": SCHEMA}})
+    )
+    message = next(f["message"] for f in findings if "empty-media-type" in f["key"])
+
+    assert "response_class=" in message
+    assert "Do NOT add `response_model=`" in message
+
+
+def test_describing_EVERY_media_type_is_clean():
+    """The rule has to be satisfiable, and by the fix it actually recommends."""
+    findings = spec_quality(sse_route({"text/event-stream": {"schema": SCHEMA}}))
+
+    assert "openapi/route-without-response-model" not in rules_fired(findings)
+
+
+def test_an_ordinary_json_route_is_still_clean():
+    findings = spec_quality(sse_route({"application/json": {"schema": SCHEMA}}))
+
+    assert "openapi/route-without-response-model" not in rules_fired(findings)
+
+
+def test_the_CLASSIC_fingerprint_is_UNCHANGED():
+    """Principle 6, and it is load-bearing here.
+
+    A route with nothing described keeps `:no-response-model`, byte for byte. Every
+    consumer baseline is keyed by these — the reporting codebase alone took 48 of these
+    findings to 0 — and re-keying them would resurrect every grandfathered one.
+    """
+    findings = spec_quality(sse_route({"application/json": {}}))
+    keys = [f["key"] for f in findings if f["rule"] == "openapi/route-without-response-model"]
+
+    assert keys == ["POST /stream:no-response-model"]
+
+
+def test_the_PHANTOM_case_gets_its_OWN_key():
+    """A different finding with a different fix, so a different identity.
+
+    Sharing `:no-response-model` would let a half-fix — describe the real media type,
+    leave the phantom — stay suppressed under the baseline entry the route already had.
+    That is this issue's own failure mode, rebuilt inside the fix for it.
+    """
+    findings = spec_quality(
+        sse_route({"application/json": {}, "text/event-stream": {"schema": SCHEMA}})
+    )
+    keys = [f["key"] for f in findings if f["rule"] == "openapi/route-without-response-model"]
+
+    assert keys == ["POST /stream:empty-media-type"]
+
+
+def test_a_response_with_no_content_at_all_is_still_the_classic_finding():
+    findings = spec_quality(
+        doc({"/x": {"get": {"responses": {"200": {"description": "ok"}}}}})
+    )
+    keys = [f["key"] for f in findings if f["rule"] == "openapi/route-without-response-model"]
+
+    assert keys == ["GET /x:no-response-model"]

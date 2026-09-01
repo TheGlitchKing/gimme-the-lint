@@ -197,6 +197,10 @@ A lockfile can be perfectly fresh and completely worthless.
   a function that does not declare one, so it emits an **empty** one. A generator then
   types the whole endpoint `any`, and your client compiles against a shape **nobody has
   ever checked**. On the first real codebase: **48 of 243 routes**.
+  For a non-JSON route (SSE, file download) the fix is `responses={...}` **plus**
+  `response_class=` — `responses=` alone leaves a phantom empty `application/json` that a
+  generator will pick. See
+  [the fact](../knowledge-base/facts/fastapi-emits-a-phantom-empty-application-json.md).
 - **`openapi/unstable-operation-id`** — generators turn `operationId` into the client
   *method name*, and FastAPI derives `operationId` from the **function name**. Rename a
   handler — a pure refactor, touching no API — and every generated client method silently

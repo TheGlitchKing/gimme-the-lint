@@ -1,4 +1,9 @@
-"""The rule's advice, executed against a real FastAPI app.
+"""Every rule's advice, executed against a real FastAPI app.
+
+Principle 4: *never emit advice the code cannot honor.* A message asserting what a line
+of somebody else's framework does is a CLAIM, and claims get tested, not reasoned about.
+Two rules have now shipped advice that was wrong — #14 and #21, both found by a user
+rather than by us — so the recommendations live here and are run.
 
 This file exists because of #14, and it is the test that would have prevented it.
 
@@ -169,3 +174,74 @@ def test_and_does_NOT_fire_on_the_document_the_new_advice_produces():
 
     assert "openapi/duplicate-operation-id" not in fired
     assert "openapi/unstable-operation-id" not in fired
+
+
+# ---------------------------------------------------------------------------------
+# #21: the same discipline, for route-without-response-model.
+#
+# `_has_schema` passed a route that described `text/event-stream`, while FastAPI emitted
+# a phantom `application/json` with an empty schema beside it. A generator picking the
+# conventional default was straight back to `any` — with a green tick over it.
+#
+# The message now says the fix is `responses={...}` PLUS `response_class=`. That is a
+# claim about what somebody else's framework does, so it is executed, not reasoned about.
+# ---------------------------------------------------------------------------------
+
+from fastapi.responses import StreamingResponse  # noqa: E402
+
+
+class Chunk(BaseModel):
+    delta: str
+
+
+SSE_RESPONSES = {200: {"content": {"text/event-stream": {"schema": Chunk.model_json_schema()}}}}
+
+
+def stream_app(**route_kwargs) -> FastAPI:
+    app = FastAPI()
+
+    @app.post("/stream", **route_kwargs)
+    async def stream():  # noqa: ANN202
+        ...
+
+    return app
+
+
+def media_types(app: FastAPI) -> dict:
+    op = app.openapi()["paths"]["/stream"]["post"]
+    return {mt: body.get("schema", {}) for mt, body in (op["responses"]["200"].get("content") or {}).items()}
+
+
+def test_responses_alone_really_does_leave_a_phantom_application_json():
+    """The regression, executed. Not folklore.
+
+    If FastAPI ever stops doing this, the rule's message needs rereading before anyone
+    "simplifies" it.
+    """
+    types = media_types(stream_app(responses=SSE_RESPONSES))
+
+    assert "application/json" in types
+    assert types["application/json"] == {}, "the phantom is EMPTY, which is the whole problem"
+    assert types["text/event-stream"], "and the honest description is there too"
+
+
+def test_response_class_is_what_removes_it():
+    """The half of the fix the docs did not say, and the half that does the work."""
+    types = media_types(stream_app(responses=SSE_RESPONSES, response_class=StreamingResponse))
+
+    assert "application/json" not in types
+    assert types["text/event-stream"]
+
+
+def test_our_rule_fires_on_the_half_fixed_document():
+    fired = {f["rule"] for f in spec_quality(stream_app(responses=SSE_RESPONSES).openapi())}
+
+    assert "openapi/route-without-response-model" in fired
+
+
+def test_and_the_advice_the_rule_GIVES_actually_satisfies_it():
+    """The point of the file. A rule that cannot be satisfied gets disabled."""
+    document = stream_app(responses=SSE_RESPONSES, response_class=StreamingResponse).openapi()
+    fired = {f["rule"] for f in spec_quality(document)}
+
+    assert "openapi/route-without-response-model" not in fired

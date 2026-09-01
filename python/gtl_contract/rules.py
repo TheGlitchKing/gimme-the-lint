@@ -215,13 +215,18 @@ LOCKFILE_STALE = _r(
 
 ROUTE_WITHOUT_RESPONSE_MODEL = _r(
     "openapi/route-without-response-model",
-    "A route that declares no response_model, so its response schema is EMPTY.",
+    "A route whose response schema is EMPTY — for any media type a client might pick.",
     "65 of 244 routes on the first real codebase. FastAPI cannot infer a response schema "
     "from a function that does not declare one, so it emits an empty one — and the spec "
     "then lies by omission for 27% of the API. Everything downstream inherits the lie: a "
     "code generator has nothing to work from and types the whole endpoint `any`, so the "
     "generated client compiles happily against a shape nobody has ever checked. "
-    "A perfect lockfile over an incomplete spec is a perfect record of a lie.",
+    "A perfect lockfile over an incomplete spec is a perfect record of a lie. "
+    "Through 2.8.2 the check asked whether SOME media type had a schema, which a "
+    "streaming route satisfied while FastAPI emitted a phantom EMPTY application/json "
+    "beside the honest one — so a generator picking the conventional default was back to "
+    "`any`, with a green tick over it (#21). The question is now whether anything a "
+    "client might pick is left empty.",
 )
 
 UNSTABLE_OPERATION_ID = _r(
