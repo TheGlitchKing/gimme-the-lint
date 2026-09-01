@@ -3,7 +3,7 @@ title: DevOps Registry
 tier: reference
 domains: [devops]
 status: active
-last_updated: '2026-07-18'
+last_updated: '2026-08-31'
 version: '1.0.0'
 purpose: Quick reference for devops documentation
 ---
@@ -35,4 +35,4 @@ purpose: Quick reference for devops documentation
 
 ---
 
-*Last updated: 2026-07-18*
+*Last updated: 2026-08-31*

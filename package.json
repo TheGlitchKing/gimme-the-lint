@@ -1,6 +1,6 @@
 {
   "name": "@theglitchking/gimme-the-lint",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "description": "Polyglot progressive linting AND contract checking for monorepos — guards the whole chain: Postgres ⇄ SQLAlchemy models ⇄ Pydantic schemas → openapi.json → generated frontend types. Adapter-driven baselines, per-app drift detection. ESLint, Biome, Ruff, golangci-lint, Clippy, tflint, ansible-lint, squawk, buf, spectral, tsc, mypy, plus SQLAlchemy/Pydantic contract drift and generated-client-type drift.",
   "keywords": [
     "linting",

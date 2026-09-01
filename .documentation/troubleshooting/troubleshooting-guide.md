@@ -73,11 +73,19 @@ workstation image (CodeArtifact / pre-baked AMI) and re-run.
 
 ## Pre-commit hook does not run
 
-- Confirm hooks are installed: `gimme-the-lint hooks`, then check
-  `.git/hooks/pre-commit`.
-- An existing hook is backed up to `.git/hooks/pre-commit.backup.<timestamp>`
-  before being replaced; `uninstall` restores it.
+- Run `gimme-the-lint status`. It prints `Hooks dir:` — **the directory git will
+  actually read**, which is not `.git/hooks` when `core.hooksPath` is set. Check
+  the hook there, not where you assume it is.
+- If `status` reports hooks in `.git/hooks` as **NEVER RUN**, they were installed
+  by a version before 2.8.2, which hardcoded that path. Re-run
+  `gimme-the-lint hooks`.
+- Your repo already owns its hooks? `hooks` refuses to overwrite them. Compose
+  instead: `gimme-the-lint hooks --print pre-commit >> <your hook>`.
+- `hooks --force` overwrites anyway, backing the file up to
+  `<hook>.backup.<timestamp>`; `uninstall` restores it.
 - Bypass in an emergency with `git commit --no-verify`.
+
+Full detail: [Git hooks guide](../procedures/git-hooks-guide.md).
 
 ## Drift warnings after a refactor
 

@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-08-31
+
+### Fixed
+
+- **The hook installer ignored `core.hooksPath` — it wrote hooks git never executes, then
+  reported them installed.** (#13)
+
+  `getHooksDir()` hardcoded `<root>/.git/hooks`. On a repo that sets
+  `core.hooksPath` — a common convention, because it lets hooks be version-controlled and
+  shared across a team — git reads that directory and **never opens `.git/hooks`**. So
+  `gimme-the-lint hooks` wrote two files git would never run, and `status` then read back
+  the same wrong directory, found its own hook, and printed **installed**.
+
+  Green tick, zero guard. That is the precise failure this engine exists to eliminate
+  (principle 1), so it must not be how the engine ships.
+
+  The directory is now **resolved, never assumed**: `git rev-parse --git-path hooks`,
+  which honors `core.hooksPath` and linked worktrees both. If that fails (not a repo, or
+  git older than 2.5) it degrades to the previous behavior rather than losing hook support.
+
+- **`status` now names the hooks directory, and calls out hooks git will never run.**
+  It prints the resolved `Hooks dir:`, and any `gimme-the-lint` hook still sitting in
+  `.git/hooks` while `core.hooksPath` points elsewhere is reported as **NEVER RUN** rather
+  than left to look like an install. Every release through 2.8.1 left exactly those files
+  behind on a `core.hooksPath` repo. The dashboard reports the same.
+
+### Added
+
+- **`gimme-the-lint hooks --print <pre-commit|pre-push>`** — a snippet to embed in a hook
+  you already own, for repos whose `pre-push` also regenerates a project map and scans for
+  secrets. Composition, not ownership. The snippet carries the same `gtl-hook-contract`
+  marker the installed hooks carry, so `status` ages an embedded block on the same terms.
+
+### Changed
+
+- **`hooks` refuses to overwrite a hook this tool did not write**, instead of backing it up
+  and taking the file. Now that the hooks directory is resolved properly it is frequently
+  *inside the working tree and version-controlled*, so "back up and overwrite" meant
+  rewriting a file the whole team shares. The refusal names the conflicts and points at
+  `--print`; `--force` still overwrites, keeping a `.backup`. Nothing is written when the
+  check fails — a partial install half-owns the repo.
+
 ## [2.8.1] - 2026-07-17
 
 ### Fixed

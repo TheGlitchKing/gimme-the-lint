@@ -3,7 +3,7 @@ title: Documentation Index
 tier: reference
 domains: [root]
 status: active
-last_updated: '2026-07-18'
+last_updated: '2026-08-31'
 version: '1.0.0'
 purpose: Navigation hub for all documentation
 ---
@@ -24,7 +24,7 @@ purpose: Navigation hub for all documentation
 | [DevOps](#devops) | 0 | Deployment, CI/CD, Docker, environments, infrastructure |
 | [Features](#features) | 0 | Feature implementation guides, admin docs |
 | [Plans](#plans) | 0 | Planning documents, roadmaps, proposals |
-| [Procedures](#procedures) | 1 | Step-by-step operational procedures (SOP) |
+| [Procedures](#procedures) | 2 | Step-by-step operational procedures (SOP) |
 | [Quickstart](#quickstart) | 3 | Setup guides, dev workflow, onboarding |
 | [Security](#security) | 0 | Security, auth, Vault, Keycloak, RLS |
 | [Standards](#standards) | 4 | Coding standards (backend, frontend, database, devops, security) |
@@ -129,6 +129,7 @@ purpose: Navigation hub for all documentation
 
 | Document | Tier | Status | Updated |
 |----------|------|--------|----------|
+| [Git Hooks Guide](procedures/git-hooks-guide.md) | guide | active | 2026-08-31 |
 | [Upgrade Guide — v2.5.x to v2.7.0](procedures/upgrade-guide.md) | guide | active | 2026-07-13 |
 
 ---
@@ -217,6 +218,6 @@ purpose: Navigation hub for all documentation
 
 ## Maintenance
 
-- **Last generated:** 2026-07-18
+- **Last generated:** 2026-08-31
 - **Run maintenance:** `npx hit-em-with-the-docs maintain`
 - **Regenerate index:** `npx hit-em-with-the-docs index`
