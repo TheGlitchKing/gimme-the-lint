@@ -392,6 +392,9 @@ program
     // "what could have written this?" always has one answer.
     const root = process.cwd();
     let wrote = 0;
+    // Lockfiles created for the FIRST time, which carry `example` values. The warning
+    // below belongs at exactly this moment and no other — see #23.
+    const createdWithExamples = [];
 
     console.log(chalk.blue('\ngimme-the-lint: materialize\n'));
 
@@ -447,6 +450,12 @@ program
         await fs.ensureDir(path.dirname(result.path));
         await fs.writeFile(result.path, result.content);
         wrote += 1;
+        // First time this file has existed, and it carries examples. Committing it
+        // moves every one of them into an artifact a secret scanner walks, and the
+        // adoption PR is where people discover that — as a red build (#23).
+        if (existing === null && /"examples?"\s*:/.test(result.content)) {
+          createdWithExamples.push(path.relative(root, result.path));
+        }
         console.log(
           `  ${chalk.green('✓')} ${unit.id} · ${linterId} → ` +
             chalk.cyan(path.relative(root, result.path))
@@ -460,6 +469,27 @@ program
       console.log(chalk.blue('change visible in a pull request instead of in production.'));
     } else {
       console.log(chalk.dim('Nothing to write.'));
+    }
+
+    // Said once, at the only moment it helps: the file is new, it has examples, and it
+    // is about to be committed. Saying it on every refresh would be noise, and noise is
+    // how people learn to skip this output.
+    if (createdWithExamples.length) {
+      console.log('');
+      console.log(
+        chalk.yellow('⚠ Before you commit: this file carries every `example` from your schemas.')
+      );
+      console.log(
+        chalk.yellow('  Anything credential-shaped — a fake JWT, an API-key pattern, a bearer')
+      );
+      console.log(
+        chalk.yellow('  token — is now in an artifact your secret scanner walks, and a scanner')
+      );
+      console.log(chalk.yellow('  cannot tell a fake one from a real one. Expect it to object.'));
+      console.log('');
+      console.log(chalk.blue('  Fix the examples at the source. Do NOT allowlist the lockfile —'));
+      console.log(chalk.blue('  it mirrors your whole API surface, and exempting it blinds the'));
+      console.log(chalk.blue('  scanner to every real credential that lands in it later.'));
     }
     console.log('');
   });
