@@ -85,6 +85,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gimme-the-lint check --json`** — the full finding list on stdout, untruncated. (#18)
+
+  The terminal report truncates each app's list at 20 (`…and 272 more`), which is right
+  for a commit hook and wrong for adoption day. A first run of 429 findings showed its
+  *count* but not its *shape* — and the shape is the whole answer: 137 findings is either
+  "137 real bugs" or "137 missing exemptions", and those demand opposite responses. (It
+  was the second.) Getting there meant bypassing the CLI: hand-building a config, calling
+  `gtl-contract` directly, and jq-ing the raw violations. The fastest path to
+  understanding your own findings should not be "do not use the front door".
+
+  ```bash
+  gimme-the-lint check --all --stage=push --json > findings.json
+  jq -r '.violations[].ruleId' findings.json | sort | uniq -c | sort -rn
+  ```
+
+  Stdout carries JSON and only JSON; diagnostics go to stderr. Every finding carries its
+  app, linter, rule, file, line, message and `neverBaseline` — the last so a consumer
+  deciding whether `baseline` is a legitimate response can tell that a defect is not
+  grandfatherable before an agent tries it.
+
+  **`allChecked` and `skipped[]` sit next to `ok`, and that is the load-bearing part.**
+  A skip is *easier* to miss in JSON than on a terminal: on a terminal it is a yellow ⚠ a
+  human notices, and in JSON an adapter that could not run serializes as an empty
+  violations array — identical to a clean pass. So `ok` mirrors the exit code (nothing
+  NEW blocked) and `allChecked` answers the different question (did everything actually
+  run), with `skipped[]` naming each one and why. A test asserts a clean payload and a
+  could-not-look payload are never equal.
+
+  **Note `--format json` never existed.** The reporter asked whether it was a bug; it was
+  a missing feature. Commander wrote `unknown option` to stderr while they watched stdout,
+  which is why it looked like it silently produced nothing. The flag is `--json`, and a
+  test pins that.
+
 - **`gtl-contract --exit-code`** — a status you can gate on when wiring the Python
   checker into CI directly. (#17)
 
