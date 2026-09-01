@@ -85,6 +85,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gimme-the-lint check --fail-on-skip`** — a skip can now fail the run. (#19)
+
+  `⚠ SKIPPED backend · contract` correctly means UNVERIFIED, and it did not fail the run —
+  so in a CI log the warning scrolls past, the job goes green, and the contract was never
+  checked. Same "guard that reports green" this project exists to eliminate, arriving
+  through omission rather than a stale hook.
+
+  It is easy to land in by accident: an explicit `apps` map bypasses auto-discovery so the
+  adapter never binds, and the contract check imports the application, so it needs the
+  app's Python deps and import-time env — which a typical `lint` job has neither of.
+
+  **Opt-in**, deliberately: defaulting it on would redden builds that were already
+  skipping yesterday, for a condition nobody introduced — the reasoning that keeps
+  `--no-stale-baseline` opt-in.
+
+  **Three statuses count as "did not run", not one.** `skipped`, `error` and
+  `needs-baseline` all produce zero violations and none is a clean bill of health. The
+  issue reported the skip half; an errored adapter returns early with no diff, so it
+  contributed 0 to the total and went green too — the same bug wearing a different status.
+  The definition is exported from the engine and imported by the JSON report, so the two
+  cannot drift into disagreeing about what "checked" means.
+
+- **The summary stops claiming coverage it does not have**, flag or no flag. (#19)
+
+  A skipped unit now reads `⚠ SKIPPED (NOT CHECKED) … This is not a pass. Nothing was
+  verified.` — the reporter's own wording — and the closing line changes from
+  *"All checks passed"* to *"No new violations — but N check(s) DID NOT RUN"*, listing
+  them and naming the flag. It is not "all checks" if one of them never ran.
+
+### Changed
+
+- **The GitHub Action reads `--json` instead of grepping its own output.** (#19)
+
+  New `fail-on-skip` input (default `false`), plus `skipped` and `all-checked` outputs.
+  Every skip is emitted as a `::warning::` annotation and named in the PR comment, which
+  previously could not report one at all: it printed a green tick and a violation count,
+  and a fully-skipped run has a violation count of zero.
+
+  This also fixes a bug nobody had filed. The old step ran
+  `grep -oE '[0-9]+ new violation' | head -1`, which matches the first **per-app** line
+  rather than the total — so a two-app repo reported the first app's count as the whole
+  answer. Parsing a display format was the bug; the display format is allowed to change,
+  and it did, in this very release.
+
 - **`gimme-the-lint check --json`** — the full finding list on stdout, untruncated. (#18)
 
   The terminal report truncates each app's list at 20 (`…and 272 more`), which is right

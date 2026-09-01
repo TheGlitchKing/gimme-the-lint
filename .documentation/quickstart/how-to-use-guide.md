@@ -88,6 +88,8 @@ anything" as a clean bill of health. **Check `allChecked` in CI**, not just `ok`
 jq -e '.allChecked' findings.json || echo "something could not be checked — see .skipped[]"
 ```
 
+Or let the tool do it: `gimme-the-lint check --fail-on-skip` (see below).
+
 > `--format json` does not exist and never has — the flag is `--json`. If you tried the
 > other one, commander wrote `unknown option` to **stderr** while you were watching
 > stdout, which is why it looked like it silently produced nothing.
@@ -153,9 +155,43 @@ module.exports = {
 ## Idempotent skips
 
 - No code for a language → silent no-op.
-- Code present but the linter is not installed → loud `⚠ SKIPPED`; the commit
-  still proceeds, and the gap is recorded.
+- Code present but the linter is not installed → loud `⚠ SKIPPED (NOT CHECKED)`; the
+  commit still proceeds, and the gap is recorded.
 - `--strict` turns that skip into a hard failure.
+
+### A skip is not a pass — especially in CI
+
+A skip means **unverified**, and it does not fail the run. On a terminal that is fine:
+a human sees the yellow line. In a CI log the warning scrolls past and the job goes
+green, so the contract was never checked and the PR shows a green tick.
+
+It is easy to land in by accident. An explicit `apps` map bypasses auto-discovery, so an
+adapter never binds; and the contract check **imports your application**, so it needs the
+app's Python dependencies and import-time env — which a typical `lint` job has neither of.
+Both produce a skip, and neither is visible on a green build.
+
+```bash
+gimme-the-lint check --all --stage=push --fail-on-skip
+```
+
+**Opt-in, deliberately.** Turning it on by default would redden builds that were already
+skipping yesterday, for a condition nobody introduced — the same reasoning that keeps
+`--no-stale-baseline` opt-in. A flag that reddens CI on a minor upgrade is a flag people
+remove rather than fix.
+
+Three statuses count as "did not run", not just the obvious one:
+
+| status | meaning |
+|---|---|
+| `skipped` | the linter, or the app, could not be reached |
+| `error` | the adapter itself failed |
+| `needs-baseline` | there was nothing to diff against |
+
+All three produce **zero violations**, and none of them is a clean bill of health.
+
+In the GitHub Action, set `fail-on-skip: true`. Either way the action now annotates every
+skip as a `::warning::` and names them in the PR comment, so a green tick cannot quietly
+mean "we did not look."
 
 ## Drift
 
