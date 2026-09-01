@@ -186,9 +186,14 @@ def cmd_openapi(args: argparse.Namespace) -> int:
 
     # Compare against the committed lockfile.
     committed = None
-    if args.lockfile and os.path.exists(args.lockfile):
+    # The flag wins over the config, which is the conventional precedence for an
+    # explicit command-line argument — and it keeps the Node path byte-identical, since
+    # the adapter always passes --lockfile with a path it has already resolved.
+    lockfile = args.lockfile or cfg.lockfile
+
+    if lockfile and os.path.exists(lockfile):
         try:
-            with open(args.lockfile, "r", encoding="utf-8") as fh:
+            with open(lockfile, "r", encoding="utf-8") as fh:
                 committed = json.load(fh)
         except Exception:
             committed = None
@@ -198,7 +203,7 @@ def cmd_openapi(args: argparse.Namespace) -> int:
     if committed is None:
         violations.append(
             {
-                "file": args.lockfile or "openapi.json",
+                "file": lockfile or "openapi.json",
                 "line": 0,
                 "ruleId": "contract/lockfile-missing",
                 "severity": "error",
@@ -221,12 +226,12 @@ def cmd_openapi(args: argparse.Namespace) -> int:
         if openapi_mod.differs(committed, document):
             violations.append(
                 {
-                    "file": args.lockfile,
+                    "file": lockfile,
                     "line": 0,
                     "ruleId": "contract/spec-implementation-mismatch",
                     "severity": "error",
                     "message": (
-                        f"{args.lockfile} is hand-authored (it carries no generated-by marker), "
+                        f"{lockfile} is hand-authored (it carries no generated-by marker), "
                         "and the API your code actually serves no longer matches it. The "
                         "published contract and the implementation have drifted apart. Neither "
                         "file has been touched — fix whichever one is wrong."
@@ -239,7 +244,7 @@ def cmd_openapi(args: argparse.Namespace) -> int:
     elif openapi_mod.differs(committed, document):
         violations.append(
             {
-                "file": args.lockfile,
+                "file": lockfile,
                 "line": 0,
                 "ruleId": "contract/lockfile-stale",
                 "severity": "error",
@@ -267,7 +272,7 @@ def cmd_openapi(args: argparse.Namespace) -> int:
     for finding in openapi_mod.spec_quality(document):
         violations.append(
             {
-                "file": args.lockfile or "openapi.json",
+                "file": lockfile or "openapi.json",
                 "line": 0,
                 "ruleId": finding["rule"],
                 "severity": "error",

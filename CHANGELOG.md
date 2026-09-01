@@ -85,6 +85,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The `lockfile` config key never reached the Python CLI.** (#22)
+
+  `cmd_openapi` read only `args.lockfile`, and `Config` had no `lockfile` field at all —
+  so `cfg.lockfile` would have raised `AttributeError` had anything tried. A config
+  carrying `lockfile: 'openapi.json'` was decorative, and the failure mode was
+  `contract/lockfile-missing` insisting the file was absent while the reader was looking
+  straight at it. Following the message's own advice does not help: `materialize` writes
+  the lockfile, and the lockfile is then not read. False guidance on top of a false
+  finding (principle 4).
+
+  **Narrower than filed, and worth saying so:** the Node adapter always passes
+  `--lockfile`, so `gimme-the-lint check` was never affected. This bit people driving
+  `gtl-contract` directly — which, as of #17 and #20 in this same release, is a documented
+  and supported thing to do. (The issue's snippet cites `cmd_check`; the code is
+  `cmd_openapi`.)
+
+  **The flag still wins over the config, and that is required rather than merely
+  conventional.** `lib/adapters/openapi.js` passes `--lockfile` with a path already
+  resolved against `appRoot`, while the config it writes carries the raw relative value.
+  If the config won, Python would resolve that relative path against its own cwd instead
+  of using the one the adapter computed. So the Node path is byte-identical to before.
+
+  `app` deliberately resolves the other way round (`cfg.app or args.app`) and is left
+  alone: no adapter passes `--app`, so precedence never arises on the Node path. A test
+  pins both, because the two lines sit next to each other and read as an inconsistency.
+
 - **`openapi/route-without-response-model` could be satisfied without fixing the problem.** (#21)
 
   `_has_schema()` meant *"does SOME media type have a schema?"* and returned on the first
