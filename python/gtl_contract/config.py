@@ -80,6 +80,18 @@ class Config:
     schemas: tuple[str, ...] = ()
     #: "app.main:app" — the ASGI app, for the authoritative route-table scan.
     app: str | None = None
+    #: The committed API contract lockfile, e.g. "openapi.json". Relative to --root.
+    #
+    # This was missing entirely until 2.9.0 (#22). `cmd_openapi` read only
+    # `args.lockfile`, so a config carrying `lockfile` was DECORATIVE — and the
+    # failure mode was a rule insisting the lockfile was missing while the reader was
+    # looking straight at it, then telling them to run `materialize`, which writes the
+    # file that is then not read. False guidance on top of a false finding.
+    #
+    # The Node adapter always passes --lockfile explicitly, so this only ever bit
+    # people driving gtl-contract directly — which, since 2.9.0, is a documented and
+    # supported thing to do.
+    lockfile: str | None = None
 
     #: Columns server-managed on EVERY entity.
     server_managed: frozenset[str] = DEFAULT_SERVER_MANAGED
@@ -135,6 +147,7 @@ def from_dict(raw: dict[str, Any] | None) -> Config:
         models=tuple(raw.get("models") or ()),
         schemas=tuple(raw.get("schemas") or ()),
         app=raw.get("app"),
+        lockfile=raw.get("lockfile"),
         server_managed=(
             frozenset(server_managed) if server_managed is not None else DEFAULT_SERVER_MANAGED
         ),

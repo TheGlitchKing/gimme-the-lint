@@ -205,12 +205,27 @@ Configure the app it should import, in `.gtl/config.js`:
 ```js
 module.exports = {
   contract: {
-    models:  ['app.models'],                 // populates the ORM registry
-    schemas: ['app.schemas', 'app.routers'], // NOT just schemas/ — see below
-    app:     'app.main:app',                 // the route table
+    models:   ['app.models'],                 // populates the ORM registry
+    schemas:  ['app.schemas', 'app.routers'], // NOT just schemas/ — see below
+    app:      'app.main:app',                 // the route table
+    lockfile: 'openapi.json',                 // the committed API contract
   },
 };
 ```
+
+| key | what it does |
+|---|---|
+| `models` | Modules to import so the ORM registry is populated. Without this there is no inventory — and an empty inventory reports a clean bill of health. |
+| `schemas` | Modules to scan for schema classes. Plural, and deliberately not just `schemas/`. |
+| `app` | `"module:attr"` for the ASGI app, for the authoritative route-table scan. |
+| `lockfile` | The committed API contract, relative to the project root. Defaults to `openapi.json`. |
+
+> **`lockfile` was decorative before 2.9.0** (#22). `gtl-contract openapi` read only the
+> `--lockfile` flag, so a config naming the file was ignored — and the failure mode was
+> `contract/lockfile-missing` insisting the lockfile was absent while you were looking
+> straight at it, then telling you to run `materialize`, which writes the file that is
+> then not read. Going through `gimme-the-lint check` was never affected: the adapter
+> always passes the flag. It bit direct invocation only.
 
 `schemas` is deliberately plural and deliberately includes `routers`. Real applications
 keep write schemas next to the routes that use them, and an inventory that only looked
