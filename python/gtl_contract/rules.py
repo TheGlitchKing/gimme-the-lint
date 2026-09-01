@@ -231,8 +231,26 @@ UNSTABLE_OPERATION_ID = _r(
     "function name, the path and the method — so RENAMING A PYTHON HANDLER silently "
     "renames every generated client method that calls it. A pure refactor, touching no "
     "API surface, ships as a breaking change to every consumer. "
-    "One line at app construction fixes it repo-wide: "
-    "FastAPI(generate_unique_id_function=lambda route: route.name).",
+    "Set generate_unique_id_function to a form keyed on the METHOD AND PATH, which is "
+    "unique by construction and is the only shape that actually survives a rename. "
+    "Through 2.8.2 this rule recommended `lambda route: route.name` instead, and that "
+    "was wrong twice: route.name IS the function name (starlette get_name returns "
+    "__name__), so it silenced the rule without decoupling anything — and it collides on "
+    "router factories, 15 routes onto 5 ids on the reporting codebase (#14).",
+)
+
+DUPLICATE_OPERATION_ID = _r(
+    "openapi/duplicate-operation-id",
+    "Two or more operations claiming the same operationId.",
+    "The rule above, held to its own standard. A duplicate operationId makes the document "
+    "INVALID, and a code generator then collides or silently drops all but one — so a "
+    "client compiles fine against an endpoint it can no longer call, which is the exact "
+    "harm unstable-operation-id exists to prevent. It went unchecked until 2.9.0: the "
+    "reporter hit 15 routes sharing 5 ids and had to write their own test to find it, "
+    "because our recommended fix caused it. FastAPI's default generator includes the path "
+    "and never collides, so a duplicate is almost always the fingerprint of a custom "
+    "generate_unique_id_function that is not, in fact, unique. FastAPI does warn — once "
+    "per duplicate, into startup output nobody reads.",
 )
 
 # --- generated client types ------------------------------------------------------
@@ -305,6 +323,7 @@ ALL_RULES: tuple[Rule, ...] = (
     SPEC_IMPLEMENTATION_MISMATCH,
     ROUTE_WITHOUT_RESPONSE_MODEL,
     UNSTABLE_OPERATION_ID,
+    DUPLICATE_OPERATION_ID,
     CODEGEN_STALE,
     CODEGEN_MISSING,
 )

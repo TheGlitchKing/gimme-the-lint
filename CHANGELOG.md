@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-09-01
+
+### Fixed
+
+- **`openapi/unstable-operation-id` recommended a fix that produced an INVALID document,
+  and did not fix the problem it described.** (#14)
+
+  The rule told people to write
+  `FastAPI(generate_unique_id_function=lambda route: route.name)`. Nobody had ever run
+  that line. It was wrong twice over.
+
+  **It does not decouple anything.** `route.name` *is* the function name —
+  `starlette.routing.get_name(endpoint)` returns `endpoint.__name__`. So the one-liner
+  made the id stop *looking* auto-derived, silencing the rule, while leaving intact the
+  function-name coupling the rule exists to complain about. You could satisfy this rule
+  without fixing the problem.
+
+  **And it collides.** Router factories are a normal FastAPI pattern, and every router
+  built from one shares its handler names. Measured on the reporting codebase: **15
+  routes onto 5 operationIds**. Reproduced here against FastAPI 0.139 — six operations
+  from one factory collapse to two ids. Duplicates make the document invalid, so a code
+  generator collides or silently drops methods: a client that compiles fine against an
+  endpoint it can no longer call. **The rule'"'"'s own recommended fix caused the exact class
+  of harm the rule exists to prevent.**
+
+  The rule now recommends
+  `lambda r: f"{sorted(r.methods)[0].lower()}_{r.path}"` — unique by construction, since
+  method plus path is what makes an operation unique in the document to begin with, and
+  the only form genuinely decoupled from Python identifiers. The message also names the
+  tag-qualified alternative honestly: readable, but unique only if your tags distinguish
+  your routers, and still function-name derived.
+
+  Corrected in all three places it was printed: the rule message, the contract-rules
+  guide, and the codegen guide — plus the knowledge-base fact, whose `verify_command`
+  now proves both halves of its claim rather than one.
+
+### Added
+
+- **`openapi/duplicate-operation-id`** — two or more operations claiming the same
+  `operationId`. Until now this was unchecked; the reporter had to write their own test
+  to discover it. One finding per duplicated id (you fix a collision once, at the
+  generator), keyed on the id so the finding survives a route joining or leaving the
+  collision. The message names every colliding route.
+
+  **It is debt, not a defect**, for an unusually direct reason: FastAPI'"'"'s default
+  generator includes the path and never collides, so a duplicate is almost always the
+  fingerprint of a custom generator — most often the one we recommended. Blocking a patch
+  upgrade for people who collided by following our own documented advice would be
+  indefensible (principle 2).
+
+- **`python/tests/test_operation_id_advice_runs.py`** — the test that would have prevented
+  this. It extracts the generator the rule recommends and *runs* it against a real FastAPI
+  app built the reporter'"'"'s way, asserting the ids come out unique; it also pins that the
+  old advice really did collide, so the regression stays evidence rather than folklore.
+  Principle 4 says never emit advice the code cannot honor — a message asserting what a
+  line of somebody else'"'"'s framework does is a claim, and claims get tested.
+
+  It caught one immediately: the first replacement recommendation was
+  `f"{route.tags[0]}_{route.name}"`, which raises `IndexError` on any untagged route. That
+  would have shipped the same class of bug in the release that fixed it.
+
+- **Knowledge-base fact:** `route-name-generator-collides-on-router-factories`, with a
+  `verify_command` CI executes — it builds the factory app, asserts the old form collides,
+  and asserts the replacement does not.
+
 ## [2.8.2] - 2026-08-31
 
 ### Fixed

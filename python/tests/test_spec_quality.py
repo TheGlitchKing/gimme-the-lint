@@ -143,11 +143,8 @@ def test_fastapis_auto_derived_operation_id_is_caught():
     assert "openapi/unstable-operation-id" in rules_fired(findings)
 
 
-def test_the_message_carries_the_ONE_LINE_fix():
-    """Reporting a problem without its fix is just complaining.
-
-    This one is repo-wide and one line, so the message must say the line.
-    """
+def test_the_message_carries_the_fix():
+    """Reporting a problem without its fix is just complaining."""
     findings = spec_quality(
         doc(
             {
@@ -166,8 +163,45 @@ def test_the_message_carries_the_ONE_LINE_fix():
         )
     )
 
-    message = next(f["message"] for f in findings if "operation-id" in f["key"])
+    message = next(f["message"] for f in findings if "auto-operation-id" in f["key"])
     assert "generate_unique_id_function" in message
+
+
+def test_the_message_no_longer_recommends_the_generator_that_COLLIDES():
+    """#14: `lambda route: route.name` was the recommendation, and it was wrong twice.
+
+    `route.name` IS the function name (starlette `get_name` returns `__name__`), so it
+    silenced this rule without decoupling anything the rule complains about. And it
+    collides on router factories — a normal FastAPI pattern — producing duplicate
+    operationIds, which make the document invalid and cause a generator to drop methods.
+
+    The rule's own fix caused the exact harm the rule exists to prevent. Guidance must be
+    true (principle 4), so this pins that it is no longer offered bare.
+    """
+    findings = spec_quality(
+        doc(
+            {
+                "/prospects/{id}": {
+                    "get": {
+                        "operationId": "get_prospect_prospects__id__get",
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {"application/json": {"schema": {"type": "object"}}},
+                            }
+                        },
+                    }
+                }
+            }
+        )
+    )
+    message = next(f["message"] for f in findings if "auto-operation-id" in f["key"])
+
+    # It may be NAMED, but only as the thing not to do.
+    assert "Do NOT use `lambda r: r.name`" in message
+    # And the form it recommends instead is keyed on method+path, which is unique by
+    # construction — path plus method is what makes an operation unique to begin with.
+    assert "r.path" in message and "r.methods" in message
 
 
 def test_a_hand_set_operation_id_is_clean():
@@ -243,3 +277,117 @@ def test_identity_is_the_ROUTE_not_the_file():
     assert "GET /a:no-response-model" in keys
     assert "GET /b:no-response-model" in keys
     assert len(keys) == 2, "two routes must be two findings"
+
+
+# --- duplicate-operation-id -------------------------------------------------------
+#
+# #14. The rule above, held to its own standard: our recommended fix produced these,
+# and nothing caught them. The reporter had to write their own test to find out.
+
+
+def two_coaches(op_id_a: str, op_id_b: str) -> dict:
+    """The reporter's exact shape: one router factory, two coaches, one handler name."""
+    ok = {
+        "200": {
+            "description": "ok",
+            "content": {"application/json": {"schema": {"type": "object"}}},
+        }
+    }
+    return doc(
+        {
+            "/annie/health": {"get": {"operationId": op_id_a, "responses": ok}},
+            "/lenny/health": {"get": {"operationId": op_id_b, "responses": ok}},
+        }
+    )
+
+
+def test_two_routes_sharing_an_operation_id_are_caught():
+    """15 routes onto 5 ids on the reporting codebase, and the document is invalid.
+
+    A generator collides or silently drops all but one, so a client compiles fine
+    against an endpoint it can no longer call.
+    """
+    findings = spec_quality(two_coaches("health_check", "health_check"))
+
+    assert "openapi/duplicate-operation-id" in rules_fired(findings)
+
+
+def test_it_reports_ONCE_PER_ID_naming_every_colliding_route():
+    """You fix a collision once, at the generator — not once per route.
+
+    But the message has to name the routes, or the finding is unactionable without
+    opening the document.
+    """
+    findings = spec_quality(two_coaches("health_check", "health_check"))
+    dupes = [f for f in findings if f["rule"] == "openapi/duplicate-operation-id"]
+
+    assert len(dupes) == 1, [f["key"] for f in dupes]
+    assert dupes[0]["key"] == "health_check:duplicate-operation-id"
+    assert "GET /annie/health" in dupes[0]["message"]
+    assert "GET /lenny/health" in dupes[0]["message"]
+
+
+def test_distinct_operation_ids_are_clean():
+    """The whole point of qualifying the generator."""
+    findings = spec_quality(two_coaches("annie_health_check", "lenny_health_check"))
+
+    assert "openapi/duplicate-operation-id" not in rules_fired(findings)
+
+
+def test_identity_is_the_ID_so_the_finding_survives_a_route_joining_the_collision():
+    """Keyed on the operationId, not the routes.
+
+    A path-keyed identity would evaporate the moment a fourth coach joined the
+    collision, resurrecting a grandfathered finding as brand new.
+    """
+    two = spec_quality(two_coaches("health_check", "health_check"))
+    ok = {
+        "200": {
+            "description": "ok",
+            "content": {"application/json": {"schema": {"type": "object"}}},
+        }
+    }
+    three = spec_quality(
+        doc(
+            {
+                "/annie/health": {"get": {"operationId": "health_check", "responses": ok}},
+                "/lenny/health": {"get": {"operationId": "health_check", "responses": ok}},
+                "/sid/health": {"get": {"operationId": "health_check", "responses": ok}},
+            }
+        )
+    )
+
+    key = lambda fs: [f["key"] for f in fs if f["rule"] == "openapi/duplicate-operation-id"]
+    assert key(two) == key(three) == ["health_check:duplicate-operation-id"]
+
+
+def test_it_is_DEBT_because_WE_caused_it():
+    """Not a defect, and the reason is unusually direct.
+
+    FastAPI's default generator includes the path and never collides. So a duplicate is
+    almost always the fingerprint of a custom generate_unique_id_function — most often
+    the one THIS RULE used to recommend. Shipping a defect that blocks people on a patch
+    upgrade for following our own documented advice is indefensible, and principle 2 says
+    a check that cannot be grandfathered blocks adoption on day one.
+    """
+    assert R.DUPLICATE_OPERATION_ID.never_baseline is False
+
+
+def test_a_route_with_no_operation_id_at_all_does_not_collide_with_another():
+    """Absent is not a value. Two routes with no operationId are not duplicates."""
+    ok = {
+        "200": {
+            "description": "ok",
+            "content": {"application/json": {"schema": {"type": "object"}}},
+        }
+    }
+    findings = spec_quality(
+        doc(
+            {
+                "/a": {"get": {"responses": ok}},
+                "/b": {"get": {"responses": ok}},
+            }
+        )
+    )
+
+    assert "openapi/duplicate-operation-id" not in rules_fired(findings)
