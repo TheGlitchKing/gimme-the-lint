@@ -261,6 +261,7 @@ git add -A && git commit -m "…" # retry
 | `gimme-the-lint check --fix` | Auto-fix where the linter supports it |
 | `gimme-the-lint check --strict` | Fail if a linter is missing for present code |
 | `gimme-the-lint check --json` | Full finding list as JSON on stdout, untruncated (triage, agents, CI summaries) |
+| `gimme-the-lint check --fail-on-skip` | Fail if any check could not run — a skip means UNVERIFIED |
 | `gimme-the-lint check --stage=push` | Also run the slower whole-app checks (the contract engine) |
 | `gimme-the-lint materialize` | Write down the API contract your code computes at runtime |
 | `gimme-the-lint verify` | Run the checks that need a database (CI only — never a git hook) |

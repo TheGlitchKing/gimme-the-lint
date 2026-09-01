@@ -19,6 +19,15 @@ inputs:
     description: 'Fail when a linter is missing for code that is present'
     required: false
     default: 'false'
+  fail-on-skip:
+    description: >
+      Fail the run if any check could not run — a missing linter, an unimportable
+      app, a unit with no baseline. A skip means UNVERIFIED, and in a CI log the
+      warning scrolls past while the job goes green. Left OFF by default because
+      turning it on would redden builds that were already skipping yesterday; the
+      skips are reported either way, in the log and in the PR comment.
+    required: false
+    default: 'false'
   verify:
     description: >
       Also run the checks that need a live database or network (e.g. alembic-check:
@@ -53,6 +62,14 @@ outputs:
   new-violations:
     description: 'Number of new violations above the baseline'
     value: ${{ steps.lint.outputs.new_violations }}
+  skipped:
+    description: >
+      Number of checks that DID NOT RUN. Non-zero means part of your codebase was
+      not verified, whatever `status` says.
+    value: ${{ steps.lint.outputs.skipped }}
+  all-checked:
+    description: 'true only if every check actually ran'
+    value: ${{ steps.lint.outputs.all_checked }}
 
 runs:
   using: 'composite'
@@ -81,19 +98,60 @@ runs:
         [ "${{ inputs.mode }}" = "full" ] && ARGS="$ARGS --all"
         [ "${{ inputs.fix }}" = "true" ] && ARGS="$ARGS --fix"
         [ "${{ inputs.strict }}" = "true" ] && ARGS="$ARGS --strict"
+        [ "${{ inputs.fail-on-skip }}" = "true" ] && ARGS="$ARGS --fail-on-skip"
 
         # CI is the one place the slower whole-app checks belong: it is not somebody's
         # keyboard, and a few seconds here costs nobody their flow. The commit hook
         # stays fast; the push hook runs these; CI runs them again against the merge.
         ARGS="$ARGS --stage=push"
 
+        # --json, not the human report, and not a grep over it. The previous version
+        # ran `grep -oE '[0-9]+ new violation' | head -1`, which matches the FIRST
+        # PER-APP line rather than the total — so a two-app repo reported the first
+        # app's count as the whole answer. Parsing a display format was the bug; the
+        # display format is allowed to change.
         EXIT=0
         npx --yes @theglitchking/gimme-the-lint check $ARGS \
-          2>&1 | tee /tmp/gimme-lint-output.log || EXIT=${PIPESTATUS[0]}
+          > /tmp/gimme-lint.json 2>/tmp/gimme-lint-stderr.log || EXIT=$?
 
-        NEW=$(grep -oE '[0-9]+ new violation' /tmp/gimme-lint-output.log \
-          | head -1 | grep -oE '[0-9]+' || echo "0")
+        # A run that produced no parseable JSON did not run at all. Say so rather than
+        # emitting zeros, which would read as a clean bill of health.
+        if ! jq -e . /tmp/gimme-lint.json >/dev/null 2>&1; then
+          echo "::error::gimme-the-lint produced no parseable output — it did not run."
+          cat /tmp/gimme-lint-stderr.log || true
+          echo "status=error" >> $GITHUB_OUTPUT
+          echo "new_violations=0" >> $GITHUB_OUTPUT
+          echo "skipped=0" >> $GITHUB_OUTPUT
+          echo "all_checked=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        NEW=$(jq -r '.newViolations' /tmp/gimme-lint.json)
+        SKIPPED=$(jq -r '.skipped | length' /tmp/gimme-lint.json)
+        ALL_CHECKED=$(jq -r '.allChecked' /tmp/gimme-lint.json)
         echo "new_violations=$NEW" >> $GITHUB_OUTPUT
+        echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+        echo "all_checked=$ALL_CHECKED" >> $GITHUB_OUTPUT
+
+        # A readable summary, rendered from the JSON rather than scraped from prose.
+        jq -r '
+          "### gimme-the-lint\n",
+          "- new violations: \(.newViolations)",
+          "- checks that did not run: \(.skipped | length)",
+          (.skipped[] | "  - ⚠ NOT CHECKED: \(.app) · \(.linter) — \(.reason // .status)"),
+          (if (.violations | length) > 0 then
+             "\n**Findings by rule:**",
+             (.violations | group_by(.ruleId) | sort_by(-length)[]
+              | "  - \(.[0].ruleId): \(length)")
+           else empty end)
+        ' /tmp/gimme-lint.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+        # Loud even when the job is green. A skip is not a pass, and an annotation
+        # survives a log nobody scrolls.
+        if [ "$SKIPPED" -gt 0 ]; then
+          jq -r '.skipped[] | "::warning::NOT CHECKED — \(.app) · \(.linter): \(.reason // .status). A skip is not a pass."' \
+            /tmp/gimme-lint.json
+        fi
 
         if [ "$EXIT" -eq 0 ]; then
           echo "status=pass" >> $GITHUB_OUTPUT
@@ -118,21 +176,51 @@ runs:
       with:
         script: |
           const fs = require('fs');
-          let output = 'No lint output captured.';
+
+          // Read the JSON, not a scraped log. The comment is the thing most people
+          // actually look at, so it must be able to say "nothing was verified" —
+          // which the previous version structurally could not: it printed a green
+          // tick and a violation count, and a fully-skipped run has a violation
+          // count of zero. (#19)
+          let data = null;
           try {
-            output = fs.readFileSync('/tmp/gimme-lint-output.log', 'utf8');
-          } catch { /* keep default */ }
+            data = JSON.parse(fs.readFileSync('/tmp/gimme-lint.json', 'utf8'));
+          } catch { /* the step already annotated this as an error */ }
 
           const status = '${{ steps.lint.outputs.status }}';
-          const newViolations = '${{ steps.lint.outputs.new_violations }}';
-          const icon = status === 'pass' ? ':white_check_mark:' : ':x:';
-
           let body = `## gimme-the-lint Results\n\n`;
-          body += `${icon} **${status}** — ${newViolations} new violation(s) above the baseline\n`;
-          if (parseInt(newViolations, 10) > 0) {
-            body += `\n<details><summary>Lint output</summary>\n\n\`\`\`\n`;
-            body += `${output.slice(-3000)}\n\`\`\`\n</details>\n`;
+
+          if (!data) {
+            body += `:rotating_light: **gimme-the-lint produced no parseable output — it did not run.**\n`;
+            body += `\nThis is not a pass. Nothing was verified.\n`;
+          } else {
+            const skipped = data.skipped || [];
+            const icon = status === 'pass' ? ':white_check_mark:' : ':x:';
+
+            body += `${icon} **${status}** — ${data.newViolations} new violation(s) above the baseline\n`;
+
+            // A skip is not a pass, and this is the line that has to say so where a
+            // green tick would otherwise end the conversation.
+            if (skipped.length) {
+              body += `\n> :warning: **${skipped.length} check(s) DID NOT RUN. Nothing was verified for these.**\n>\n`;
+              for (const s of skipped) {
+                body += `> - \`${s.app} · ${s.linter}\` — ${s.reason || s.status}\n`;
+              }
+              body += `>\n> A skip is not a pass. Set \`fail-on-skip: true\` to make this fail the build.\n`;
+            }
+
+            if (data.violations && data.violations.length) {
+              const byRule = {};
+              for (const v of data.violations) byRule[v.ruleId] = (byRule[v.ruleId] || 0) + 1;
+              const rows = Object.entries(byRule).sort((a, b) => b[1] - a[1]);
+
+              body += `\n<details><summary>${data.violations.length} finding(s) by rule</summary>\n\n`;
+              body += `| rule | count |\n|---|---|\n`;
+              for (const [rule, n] of rows) body += `| \`${rule}\` | ${n} |\n`;
+              body += `\n</details>\n`;
+            }
           }
+
           body += `\n---\n*Generated by [gimme-the-lint](https://github.com/TheGlitchKing/gimme-the-lint)*`;
 
           const { data: comments } = await github.rest.issues.listComments({

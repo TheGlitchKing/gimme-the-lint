@@ -154,6 +154,11 @@ program
     'Emit the full finding list as JSON on stdout, untruncated (for triage, agents, ' +
       'and CI summaries). Diagnostics go to stderr.'
   )
+  .option(
+    '--fail-on-skip',
+    'Fail the run if any check could not run (a missing linter, an unimportable app). ' +
+      'A skip means UNVERIFIED, and in CI a warning scrolls past while the job goes green.'
+  )
   .action(async (opts) => {
     const chalk = require('chalk');
     const { runCheck } = require('../lib/check');
@@ -166,6 +171,7 @@ program
         stage: opts.stage,
         // commander maps `--no-stale-baseline` to staleBaseline === false
         noStaleBaseline: opts.staleBaseline === false,
+        failOnSkip: opts.failOnSkip,
       });
       if (opts.json) {
         // stdout carries JSON and only JSON. The same discipline the Python CLI
