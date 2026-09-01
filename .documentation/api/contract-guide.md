@@ -134,6 +134,58 @@ keep write schemas next to the routes that use them, and an inventory that only 
 in the obvious place would under-report — which is the exact failure mode it exists to
 prevent.
 
+## Running `gtl-contract` directly, and its exit codes
+
+Most people never invoke the Python checker themselves — `gimme-the-lint check` does it.
+But direct invocation is a real need: the check **imports your application**, so the only
+CI runner with the app's Python dependencies installed is often not the one with Node on
+it.
+
+> 🔴 **`gtl-contract check` exits 0 even when it finds violations.** That is deliberate,
+> and it is a booby trap for exactly the CI wiring people attempt first:
+>
+> ```console
+> $ gtl-contract check --root . --config cfg.json > out.json ; echo "exit=$?"
+> exit=0
+> $ jq '.violations | length' out.json
+> 137
+> ```
+>
+> A job wired that way **can never fail**. Pass `--exit-code` (2.9.0+) to get a status
+> you can gate on.
+
+```bash
+gtl-contract check --root . --config cfg.json --exit-code
+```
+
+| exit | meaning |
+|---|---|
+| `0` | We checked. `violations` may be empty (genuinely clean) or not. |
+| `1` | We could **not** check. `skip` says why; `detail` usually carries a traceback. |
+| `2` | We were used wrong — bad flag, unknown provider. |
+| `3` | We checked and **found violations**. Only ever returned with `--exit-code`. |
+
+### Why "found violations" is `3` and not `1`
+
+Because `1` already means **we could not look**, and those are the two facts this
+protocol exists to keep apart.
+
+The obvious fix — *exit non-zero when `violations` is non-empty* — collides them.
+`lib/adapters/contract.js` reads exit 1 as `checked: false` and maps it onto the
+idempotent-skip contract: **warn loudly, never block**. So a run that found 137 real
+violations would reach the engine as a *skip*, be warned about, and never block on. The
+obvious fix turns a working gate into a silent one.
+
+`--exit-code` is therefore opt-in, and the default is unchanged: turning it on by default
+would break every existing caller's CI on a minor upgrade. **The engine never passes it**
+— it reads `checked` and `violations` off the JSON, which carries strictly more than a
+status byte.
+
+`--exit-code` also works on `gtl-contract openapi`.
+
+> **`1` always wins.** A run that could not look reports `1` even with `--exit-code` set.
+> "We could not look" outranks "we found nothing", always.
+
 ## Providers
 
 | provider | persistence | transport |

@@ -85,6 +85,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gtl-contract --exit-code`** — a status you can gate on when wiring the Python
+  checker into CI directly. (#17)
+
+  `gtl-contract check` exits 0 with 137 violations, so a job wired straight to it can
+  never fail: a gate that looks like a gate and is not one. Direct invocation is a real
+  need, because the check imports your application and the only runner with the app's
+  Python dependencies is often not the one with Node on it.
+
+  **The fix as filed is not the fix that shipped, and the difference matters.** The issue
+  suggested exiting non-zero when `violations` is non-empty. Exit 1 already means *we
+  could not check*, and `lib/adapters/contract.js` reads it that way, mapping it onto the
+  idempotent-skip contract — warn loudly, never block. Overloading exit 1 would mean a run
+  that found 137 real violations reaches the engine as a **skip**: warned about, never
+  blocked on. The suggested fix turns a working gate into a silent one.
+
+  So "checked and found violations" gets its own code, **3**, and the flag is opt-in —
+  turning it on by default would break every existing caller's CI on a minor upgrade. The
+  full protocol is now documented in `--help`, the README, and the contract guide:
+  `0` checked · `1` could not check · `2` used wrong · `3` checked and found violations.
+  **`1` always wins**: a run that could not look reports 1 even with `--exit-code` set.
+  The flag also works on `gtl-contract openapi`. The engine never passes it — it reads
+  `checked` and `violations` off the JSON, which carries more than a status byte can.
+
 - **`openapi/duplicate-operation-id`** — two or more operations claiming the same
   `operationId`. Until now this was unchecked; the reporter had to write their own test
   to discover it. One finding per duplicated id (you fix a collision once, at the

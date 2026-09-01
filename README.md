@@ -270,6 +270,12 @@ git add -A && git commit -m "…" # retry
 | `gimme-the-lint status` | Overall plugin status |
 | `gimme-the-lint uninstall` | Remove hooks and config |
 
+Wiring the Python contract checker into CI **directly** (because the check imports your
+app, and your Python runner may not have Node)? `gtl-contract check` reports findings on
+stdout and **exits 0 even when it finds violations** — pass `--exit-code` to get a status
+you can gate on (`3` = found violations; `1` stays "could not check"). See
+[`.documentation/api/contract-guide.md`](.documentation/api/contract-guide.md#running-gtl-contract-directly-and-its-exit-codes).
+
 > **Upgrading from v2.5?** Re-run `gimme-the-lint hooks`, or the new checks silently
 > never fire. See [`.documentation/procedures/upgrade-guide.md`](.documentation/procedures/upgrade-guide.md)
 > — it carries the full error catalog.
