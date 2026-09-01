@@ -85,6 +85,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`openapi/route-without-response-model` could be satisfied without fixing the problem.** (#21)
+
+  `_has_schema()` meant *"does SOME media type have a schema?"* and returned on the first
+  one it found. So a streaming or download route described honestly —
+  `responses={200: {"content": {"text/event-stream": {...}}}}` — **passed**, while FastAPI
+  emitted a phantom `application/json` with an **empty** schema right beside it. A code
+  generator picking `application/json`, the conventional default, was straight back to
+  `any`: the exact outcome this rule's own message warns about, with a green tick over it.
+
+  Same shape as #14, and found the same way — by a user inspecting the emitted document
+  instead of trusting our verdict. Six of the reporter's 48 findings were streaming
+  endpoints where the naive fix silently under-delivered.
+
+  Verified against FastAPI 0.139: `responses=` alone yields **both** media types, and only
+  adding `response_class=` removes the empty one. The check now asks *"is anything a
+  client might pick left empty?"*
+
+  **The message now gives both halves of the fix**, because neither works alone:
+  `responses=` describes the shape, `response_class=` stops FastAPI claiming a JSON body
+  it never sends. It also says explicitly **not** to reach for `response_model=` on a
+  non-JSON route — FastAPI serializes *through* it, so that advice was meaningless at best
+  and left the phantom in place (principle 4).
+
+  **Existing fingerprints are unchanged.** A route with nothing described keeps
+  `:no-response-model` byte for byte — the reporting codebase alone took 48 of these to 0,
+  and re-keying would resurrect every grandfathered one (principle 6). The new case gets
+  its own `:empty-media-type` identity, deliberately: sharing the old key would let a
+  half-fix stay suppressed under the baseline entry the route already had, which is this
+  issue's own failure mode rebuilt inside the fix for it.
+
+  New knowledge-base fact `fastapi-emits-a-phantom-empty-application-json`, with a
+  `verify_command` CI executes. `python/tests/test_operation_id_advice_runs.py` is renamed
+  to `test_the_advice_runs.py` and now runs the recommended fix for **both** rules that
+  have shipped wrong advice.
+
 - **`install` now says that the entity-contract checker needs a step it cannot take.** (#20)
 
   Investigating the reported docs gap turned up something broader than the report: neither

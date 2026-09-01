@@ -311,6 +311,45 @@ returns. **A perfect lockfile over an incomplete spec is a perfect record of a l
 **Fix:** add `response_model=...` to the route (or a return annotation — FastAPI will use
 that too).
 
+#### Non-JSON routes: the fix is two halves, and neither works alone
+
+> 🔴 **Corrected in 2.9.0.** This rule used to ask whether *some* media type had a schema,
+> and returned on the first one it found. A streaming or download route described
+> honestly with `responses={...}` therefore **passed** — while FastAPI emitted a phantom
+> `application/json` with an **empty** schema alongside it. A generator picking
+> `application/json`, the conventional default, was straight back to `any`: exactly the
+> outcome this rule's message warns about, with a green tick over it (#21).
+
+Verified against FastAPI 0.139:
+
+```python
+@router.post("/stream", responses=SSE_STREAM)
+# -> content: {'application/json': {},  'text/event-stream': {...}}   ← phantom, EMPTY
+
+@router.post("/stream", responses=SSE_STREAM, response_class=StreamingResponse)
+# -> content: {'text/event-stream': {...}}                            ← clean
+```
+
+So for an SSE, file-download, or plain-text route:
+
+```python
+@router.post(
+    "/stream",
+    responses={200: {"content": {"text/event-stream": {"schema": Chunk.model_json_schema()}}}},
+    response_class=StreamingResponse,   # ← this is what removes the phantom
+)
+```
+
+**Do not add `response_model=` to a non-JSON route.** FastAPI serializes *through* it, so
+it is meaningless at best — and it leaves the empty `application/json` exactly where it
+was. `responses=` describes the shape; `response_class=` stops FastAPI claiming a JSON
+body it never sends. Both are needed.
+
+The two cases carry different identities — `:no-response-model` when nothing is described,
+`:empty-media-type` when something is described and an empty one rides along — so a
+half-fix surfaces as a new finding rather than staying grandfathered under the entry the
+route already had.
+
 ---
 
 ### `openapi/unstable-operation-id`
