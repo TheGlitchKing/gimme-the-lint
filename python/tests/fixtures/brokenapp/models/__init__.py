@@ -57,6 +57,13 @@ class BudgetLineItem(Base):
     notes = Column(String)
     amount = Column(Float)
 
+    # #16: the tenant-isolation boundary. Correctly absent from every write schema —
+    # a client must never set its own org. The rule cannot tell "correctly locked
+    # down" from "accidentally omitted", so it fires either way, and it must NOT be
+    # the message that says "add it to the write schema."
+    # -> contract/column-not-writable, with the TENANCY wording
+    org_id = Column(String)
+
 
 class Organization(Base):
     __tablename__ = "organizations"

@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`contract/column-not-writable` pointed at the dangerous fix on a tenancy column.** (#16)
+
+  A reporter's `org_id` — their tenant-isolation boundary, correctly absent from every
+  write schema — was flagged `column-not-writable`. The message read *"Add it to the write
+  schema, or declare it in serverManaged / intentionallyAbsent."* The obvious reading is
+  the first clause, and following it produces a write schema in which **a client sets its
+  own tenant**: cross-tenant write access, arrived at by doing what the tool said. An agent
+  following the LLM footer would open the hole or bury the finding, and report success
+  either way.
+
+  The rule is *right* that the column is not client-writable. It simply cannot tell
+  "correctly locked down" from "accidentally omitted", and it led with the dangerous half.
+
+  When the column name looks like a tenancy or ownership boundary (`org_id`,
+  `organization_id`, `tenant_id`, `account_id`, `workspace_id`, `company_id`, `user_id`,
+  `owner_id`, `author_id`, `customer_id`, `created_by`, `updated_by`) the message now
+  leads with the safe reading — *"THIS FINDING IS CORRECT — declare it `serverManaged`"* —
+  and names the consequence of the other one. **The finding still fires**, and the
+  fingerprint is unchanged, so no baseline anywhere is invalidated.
+
+  **The reporter also asked for those names in core's `DEFAULT_SERVER_MANAGED`, and that
+  half is declined.** That list *suppresses* findings: shipping `user_id` in it would
+  silently server-manage `user_id` on every table in every repo, hiding exactly the
+  genuinely-forgotten `user_id` this rule exists to catch. It also sits in core
+  `config.py`, which is the precise thing principle 3 names — *"when engine code starts
+  knowing what `org_id` means, the firewall has been breached; the fix belongs in a
+  provider, every time."* The heuristic is therefore in the provider, where that sentence
+  sends it, and it only ever changes wording — never what fires. A pinning test keeps the
+  core defaults at three timestamps.
+
+### Changed
+
+- **Docs: "zero defects" no longer implies a quiet first run.** (#16)
+  `decision-vs-debt-guide.md` promised that a codebase with no defects meets no adoption
+  cliff. True as far as it went — nothing blocks — but the same codebase opened with
+  **429 findings** (137 contract, 292 openapi), essentially none of them bugs. The
+  natural response to a wall of findings is `baseline`, which grandfathers the handful of
+  real ones along with the noise. The guide now gives two numbers instead of one and says
+  where the adoption cost actually lives: reading the debt, not fixing the defects.
+
+### Fixed
+
 - **`openapi/unstable-operation-id` recommended a fix that produced an INVALID document,
   and did not fix the problem it described.** (#14)
 
@@ -27,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   routes onto 5 operationIds**. Reproduced here against FastAPI 0.139 — six operations
   from one factory collapse to two ids. Duplicates make the document invalid, so a code
   generator collides or silently drops methods: a client that compiles fine against an
-  endpoint it can no longer call. **The rule'"'"'s own recommended fix caused the exact class
+  endpoint it can no longer call. **The rule's own recommended fix caused the exact class
   of harm the rule exists to prevent.**
 
   The rule now recommends
@@ -49,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generator), keyed on the id so the finding survives a route joining or leaving the
   collision. The message names every colliding route.
 
-  **It is debt, not a defect**, for an unusually direct reason: FastAPI'"'"'s default
+  **It is debt, not a defect**, for an unusually direct reason: FastAPI's default
   generator includes the path and never collides, so a duplicate is almost always the
   fingerprint of a custom generator — most often the one we recommended. Blocking a patch
   upgrade for people who collided by following our own documented advice would be
@@ -57,10 +99,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`python/tests/test_operation_id_advice_runs.py`** — the test that would have prevented
   this. It extracts the generator the rule recommends and *runs* it against a real FastAPI
-  app built the reporter'"'"'s way, asserting the ids come out unique; it also pins that the
+  app built the reporter's way, asserting the ids come out unique; it also pins that the
   old advice really did collide, so the regression stays evidence rather than folklore.
   Principle 4 says never emit advice the code cannot honor — a message asserting what a
-  line of somebody else'"'"'s framework does is a claim, and claims get tested.
+  line of somebody else's framework does is a claim, and claims get tested.
 
   It caught one immediately: the first replacement recommendation was
   `f"{route.tags[0]}_{route.name}"`, which raises `IndexError` on any untagged route. That

@@ -40,6 +40,24 @@ A column exists that **no write schema accepts**, so a client can never save it.
 **Fix:** add it to the write schema. **Or:** declare it in `serverManaged` (a client
 must never set it) or `intentionallyAbsent` (with a reason).
 
+> 🔴 **If the column is a tenancy or ownership boundary, the first fix is a security
+> hole.** `org_id`, `tenant_id`, `user_id`, `owner_id`, `created_by` and friends are
+> server-managed on essentially every multi-tenant table. Adding one to a write schema
+> to silence this rule lets **a client set its own tenant** — cross-tenant write access,
+> arrived at by following the tool's advice (#16).
+>
+> Since 2.9.0 the rule says so itself: when the column name looks like a boundary, the
+> message leads with *"this finding is CORRECT — declare it `serverManaged`"* and warns
+> against the write-schema fix explicitly. The finding still fires, because the rule
+> cannot tell **correctly locked down** from **accidentally omitted**, and silencing it
+> on a name would hide the second case — which is the rule's whole job.
+>
+> The names are a **provider** heuristic
+> (`providers/sqlalchemy_pydantic/checks.py`), not a core default. They are deliberately
+> **not** added to `DEFAULT_SERVER_MANAGED`: that list *suppresses* findings, and
+> suppressing `user_id` everywhere would hide every genuinely-forgotten `user_id`.
+> Warning is safe; suppressing on a guess is not.
+
 ---
 
 ### `contract/column-not-readable`
